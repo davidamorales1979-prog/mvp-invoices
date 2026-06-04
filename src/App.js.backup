@@ -1,0 +1,65 @@
+import React, { useEffect, useState } from 'react'
+import './App.css'
+
+const NAVY = '#0a1628'
+const GOLD = '#c9a84c'
+
+function useCounter(key = 'mvp_invoice_counter_v1', prefix = 'Q') {
+	const [n, setN] = useState(() => Number(localStorage.getItem(key) || 1001))
+	useEffect(() => { localStorage.setItem(key, String(n)) }, [key, n])
+	return { value: `${prefix}-${n}`, bump: () => setN(x => x + 1), raw: n }
+}
+
+export default function App() {
+	const counter = useCounter()
+	const [contractor, setContractor] = useState('MVP Solutions')
+	const [showLogo, setShowLogo] = useState(true)
+	const [docType, setDocType] = useState('quote')
+	const [docNumber, setDocNumber] = useState(counter.value)
+
+	useEffect(() => setDocNumber(counter.value), [counter.raw])
+
+	function convertToInvoice() {
+		if (docType === 'invoice') return
+		counter.bump()
+		setDocType('invoice')
+		setDocNumber(counter.value)
+	}
+
+	function printDoc() { window.print() }
+
+	return (
+		<div style={{ minHeight: '100vh', background: NAVY, color: '#fff', padding: 20 }}>
+			<div style={{ maxWidth: 900, margin: '0 auto', background: '#0c2230', padding: 20, borderRadius: 8 }}>
+				<header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+					<div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+						{showLogo ? <div style={{ width: 48, height: 48, background: GOLD, borderRadius: 6 }} /> : null}
+						<div style={{ color: GOLD, fontWeight: 700 }}>MVP Solutions</div>
+					</div>
+					<div style={{ textAlign: 'right' }}>
+						<div>{contractor}</div>
+						<div style={{ color: '#ccc' }}>{docType.toUpperCase()} {docNumber}</div>
+					</div>
+				</header>
+
+				<div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+					<button onClick={() => setContractor('David Morales')} style={{ background: contractor === 'David Morales' ? GOLD : '#184', color: '#fff', padding: 8, border: 'none', borderRadius: 4 }}>David Morales</button>
+					<button onClick={() => setContractor('Alejandro Morales')} style={{ background: contractor === 'Alejandro Morales' ? GOLD : '#184', color: '#fff', padding: 8, border: 'none', borderRadius: 4 }}>Alejandro Morales</button>
+					<button onClick={() => setContractor('MVP Solutions')} style={{ background: contractor === 'MVP Solutions' ? GOLD : '#184', color: '#fff', padding: 8, border: 'none', borderRadius: 4 }}>MVP Solutions</button>
+				</div>
+
+				<div style={{ marginTop: 12 }}>
+					<label style={{ color: '#ccc' }}><input type="checkbox" checked={showLogo} onChange={e => setShowLogo(e.target.checked)} /> Show logo</label>
+				</div>
+
+				<div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
+					<label style={{ color: '#ccc' }}><input type="radio" name="type" checked={docType === 'quote'} onChange={() => setDocType('quote')} /> Quote</label>
+					<label style={{ color: '#ccc' }}><input type="radio" name="type" checked={docType === 'invoice'} onChange={() => setDocType('invoice')} /> Invoice</label>
+					<button onClick={convertToInvoice} style={{ marginLeft: 'auto', background: GOLD, color: NAVY, border: 'none', padding: 8, borderRadius: 4 }}>Convert to Invoice</button>
+					<button onClick={printDoc} style={{ background: GOLD, color: NAVY, border: 'none', padding: 8, borderRadius: 4 }}>Print / PDF</button>
+				</div>
+			</div>
+		</div>
+	)
+}
+

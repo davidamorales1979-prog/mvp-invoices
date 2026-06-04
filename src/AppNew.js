@@ -1,0 +1,492 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import './App.css'
+
+const NAVY = '#0a1628'
+const GOLD = '#c9a84c'
+
+function useCounter(key = 'mvp_invoice_counter_v1') {
+  const [n, setN] = useState(() => Number(localStorage.getItem(key) || 1001))
+  useEffect(() => { localStorage.setItem(key, String(n)) }, [key, n])
+  return { bump: () => setN(x => x + 1), raw: n, reset: (v=1001)=>setN(v) }
+}
+
+const SERVICES = [
+  { id: 'sewer', name: 'Sewer Line', unit: 1200 },
+  { id: 'water', name: 'Water Line Meter', unit: 800 },
+  { id: 'temp_gas', name: 'Temp Gas', unit: 250 },
+  { id: 'gas_riser', name: 'Gas Riser', unit: 400 },
+  { id: 'manablok', name: 'Manablok System', unit: 950 },
+  { id: 'water_heater', name: 'Water Heater', unit: 600 },
+  { id: 'storm', name: 'Storm Drain', unit: 700 },
+  { id: 'repiping', name: 'Repiping', unit: 1500 },
+  { id: 'gas_indoor', name: 'Gas System Indoor', unit: 300 },
+  { id: 'grease', name: 'Grease Trap', unit: 450 },
+  { id: 'cut_bust', name: 'Cut and Bust Concrete', unit: 200 }
+]
+
+const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater']
+
+function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
+function formatMoneyInput(n){ return '$' + (Number(n || 0).toString()) }
+function parseMoneyInput(value){ const numeric = Number(String(value).replace(/[^0-9.]/g, '')); return Number.isNaN(numeric) ? 0 : numeric }
+function formatDocNumber(raw, type){
+  let serialNumber = raw > 1000 ? raw - 1000 : raw
+  if (serialNumber < 1) serialNumber = 1
+  const serial = String(serialNumber).padStart(3,'0')
+  return type === 'invoice' ? `INV-${serial}` : `Q-${serial}`
+}
+
+export default function AppNew(){
+  const counter = useCounter()
+  const [contractor, setContractor] = useState('MVP Solutions')
+  const [showLogo, setShowLogo] = useState(true)
+  const [docType, setDocType] = useState('quote')
+  const docNumber = formatDocNumber(counter.raw, docType)
+
+  const [client, setClient] = useState('')
+  const [address, setAddress] = useState('')
+
+  const [houses, setHouses] = useState(1)
+  const [fixturesPerHouse, setFixturesPerHouse] = useState(1)
+  const [pricePerFixture, setPricePerFixture] = useState(120)
+  const [fixtureType, setFixtureType] = useState('Residential')
+  const [projectType, setProjectType] = useState('New Construction')
+  const [includeUnderground, setIncludeUnderground] = useState(true)
+  const [includeRough, setIncludeRough] = useState(true)
+  const [includeTrim, setIncludeTrim] = useState(true)
+  const [serviceStartPercent, setServiceStartPercent] = useState(50)
+  const [serviceCompletionPercent, setServiceCompletionPercent] = useState(50)
+
+  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+  const [addons, setAddons] = useState([])
+  const [notes, setNotes] = useState('')
+  const [history, setHistory] = useState([])
+  const [status, setStatus] = useState('draft')
+
+  const isResidentialNewConstruction = projectType === 'New Construction' && fixtureType === 'Residential'
+  const baseServiceAmount = services.reduce((sum,s) => {
+    if (!isResidentialNewConstruction) return sum
+    if (!BASE_SERVICE_IDS.includes(s.id)) return sum
+    return sum + ((s.enabled ? (s.qty||0) : 0) * (s.unit||0))
+  }, 0)
+  const base = houses * fixturesPerHouse * pricePerFixture + baseServiceAmount
+  const phases = useMemo(() => {
+    if (projectType === 'New Construction') {
+      return { underground: base*0.3, rough: base*0.5, trim: base*0.2 }
+    }
+    return {
+      start: base * (serviceStartPercent / 100),
+      completion: base * (serviceCompletionPercent / 100)
+    }
+  }, [base, projectType, serviceStartPercent, serviceCompletionPercent])
+  const showFixturesPrint = base > 0
+  const showNewConstructionSchedule = projectType === 'New Construction' && (includeUnderground || includeRough || includeTrim)
+  const selectedPhaseNames = []
+  if (includeUnderground) selectedPhaseNames.push('30% Underground')
+  if (includeRough) selectedPhaseNames.push('50% Rough-In')
+  if (includeTrim) selectedPhaseNames.push('20% Trim')
+  const selectedPhaseLabel = selectedPhaseNames.length === 0 ? '' : selectedPhaseNames.length === 1 ? selectedPhaseNames[0] : selectedPhaseNames.length === 2 ? `${selectedPhaseNames[0]} and ${selectedPhaseNames[1]}` : selectedPhaseNames.join(', ')
+  const selectedPhaseAmount = selectedPhaseNames.reduce((sum,name) => {
+    if (name === '30% Underground') return sum + phases.underground
+    if (name === '50% Rough-In') return sum + phases.rough
+    if (name === '20% Trim') return sum + phases.trim
+    return sum
+  }, 0)
+  const paymentScheduleList = []
+  if (includeUnderground) paymentScheduleList.push({ name: '30% Underground', pct: 30, amount: phases.underground })
+  if (includeRough) paymentScheduleList.push({ name: '50% Rough-In', pct: 50, amount: phases.rough })
+  if (includeTrim) paymentScheduleList.push({ name: '20% Trim', pct: 20, amount: phases.trim })
+  const showPrintNote = projectType === 'New Construction' && selectedPhaseNames.length > 0 && (docType === 'quote' || selectedPhaseNames.length < 3)
+  const printAddress = address || ''
+
+  const servicesTotal = useMemo(()=> services.reduce((s,it)=> {
+    if (isResidentialNewConstruction && BASE_SERVICE_IDS.includes(it.id)) return s
+    return s + (it.enabled ? (it.qty||0)*(it.unit||0) : 0)
+  }, 0), [services, isResidentialNewConstruction])
+  const printServices = services.filter(s => s.enabled && s.qty>0 && !(isResidentialNewConstruction && BASE_SERVICE_IDS.includes(s.id)))
+  const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
+  const subtotal = base + servicesTotal + addonsTotal
+  const schedule = useMemo(() => {
+    if (projectType === 'New Construction') {
+      return { underground: subtotal*0.3, rough: subtotal*0.5, trim: subtotal*0.2 }
+    }
+    return { start: subtotal*0.5, completion: subtotal*0.5 }
+  }, [subtotal, projectType])
+
+  function pushHistory(entry){ setHistory(h=> [{ ts:new Date().toISOString(), entry, status, docNumber }, ...h]) }
+  function setDocStatus(next){ setStatus(next); pushHistory(`status:${next}`) }
+  function convertToInvoice(){ if (docType!=='invoice'){ counter.bump(); setDocType('invoice'); pushHistory('converted:quote->invoice') } }
+  function printDoc(){ pushHistory('printed'); window.print() }
+  function newNumber(){ counter.reset(); pushHistory('reset:number') }
+
+  function toggleService(i, enabled){ setServices(s=>{ const c=[...s]; c[i].enabled = enabled; return c }) }
+  function updateService(i, field, value){ setServices(s=>{ const c=[...s]; c[i] = { ...c[i], [field]: value }; return c }) }
+  function addAddon(desc, qty, unit){ setAddons(a=>[...a, { desc, qty, unit }]); pushHistory('addon:added') }
+  function removeAddon(i){ setAddons(a=> a.filter((_,idx)=>idx!==i)); pushHistory('addon:removed') }
+
+  return (
+    <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
+      <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
+        <div className='invoice-header screen-only' style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+            {contractor === 'MVP Solutions' && showLogo ? (
+              <div style={{ width:56, height:56, background:GOLD, borderRadius:6 }} />
+            ) : contractor === 'MVP Solutions' ? (
+              <div style={{ color:'#7f98b0' }}>Logo hidden</div>
+            ) : null}
+
+            {contractor === 'MVP Solutions' ? (
+              <div><div style={{ color:GOLD, fontWeight:700 }}>MVP Solutions</div><div style={{ color:'#9fb0c6' }}>{contractor}</div></div>
+            ) : (
+              <div style={{ color:GOLD, fontWeight:700 }}>{contractor}</div>
+            )}
+          </div>
+          <div style={{ textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>{docType.toUpperCase()}</div><div style={{ color:GOLD, fontWeight:700 }}>{docNumber}</div></div>
+        </div>
+
+        <div className='screen-only'>
+          <div className='no-print' style={{ marginTop:12, display:'flex', gap:8, alignItems:'center' }}>
+          <button onClick={()=>setContractor('David Morales')} style={{ padding:8, borderRadius:6, background: contractor==='David Morales' ? GOLD : '#0f2740' }}>David Morales</button>
+          <button onClick={()=>setContractor('Alejandro Morales')} style={{ padding:8, borderRadius:6, background: contractor==='Alejandro Morales' ? GOLD : '#0f2740' }}>Alejandro Morales</button>
+          <button onClick={()=>setContractor('MVP Solutions')} style={{ padding:8, borderRadius:6, background: contractor==='MVP Solutions' ? GOLD : '#0f2740' }}>MVP Solutions</button>
+          <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+            <label style={{ color:'#9fb0c6' }}><input type='checkbox' checked={showLogo} onChange={e=>setShowLogo(e.target.checked)} /> Show logo</label>
+            <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
+            <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
+            <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
+            <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
+          </div>
+        </div> 
+
+        <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div>
+            <label style={{ color:'#9fb0c6' }}>Client</label>
+            <input value={client} onChange={e=>setClient(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
+          </div>
+          <div>
+            <label style={{ color:'#9fb0c6' }}>Address</label>
+            <input value={address} onChange={e=>setAddress(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
+          </div>
+        </div>
+
+        <section className={!showFixturesPrint ? 'no-print' : undefined} style={{ marginTop:14, background:'#041827', padding:12, borderRadius:8 }}>
+          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+            <div><label style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Houses' : 'Units'}</label><input type='number' value={houses} onChange={e=>setHouses(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
+            <div><label style={{ color:'#9fb0c6' }}>Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Commercial</option></select></div>
+            <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option></select></div>
+            <div><label style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Fixtures / House' : 'Fixtures / Unit'}</label><input type='number' value={fixturesPerHouse} onChange={e=>setFixturesPerHouse(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
+            <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
+            <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
+          </div>
+          <div style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
+            {projectType === 'New Construction' ? (
+              <>
+                <div className={!includeUnderground ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeUnderground} onChange={e=>setIncludeUnderground(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>30% Underground</span></label>
+                  <div><strong style={{ color:GOLD }}>{formatCurrency(phases.underground)}</strong></div>
+                </div>
+                <div className={!includeRough ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeRough} onChange={e=>setIncludeRough(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>50% Rough-In</span></label>
+                  <div><strong style={{ color:GOLD }}>{formatCurrency(phases.rough)}</strong></div>
+                </div>
+                <div className={!includeTrim ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeTrim} onChange={e=>setIncludeTrim(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>20% Trim</span></label>
+                  <div><strong style={{ color:GOLD }}>{formatCurrency(phases.trim)}</strong></div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ padding:8, background:'#022026', borderRadius:6, flex:1 }}>
+                  <div style={{ marginBottom:6, color:'#9fb0c6' }}>Start %</div>
+                  <input className='no-print' type='number' value={serviceStartPercent} onChange={e=>setServiceStartPercent(Number(e.target.value)||0)} style={{ width:80, padding:6, marginBottom:8, borderRadius:4 }} />
+                  <div><strong style={{ color:GOLD }}>{formatCurrency(phases.start)}</strong></div>
+                </div>
+                <div style={{ padding:8, background:'#022026', borderRadius:6, flex:1 }}>
+                  <div style={{ marginBottom:6, color:'#9fb0c6' }}>Completion %</div>
+                  <input className='no-print' type='number' value={serviceCompletionPercent} onChange={e=>setServiceCompletionPercent(Number(e.target.value)||0)} style={{ width:80, padding:6, marginBottom:8, borderRadius:4 }} />
+                  <div><strong style={{ color:GOLD }}>{formatCurrency(phases.completion)}</strong></div>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className={servicesTotal===0 ? 'no-print' : undefined} style={{ marginTop:14 }}>
+          <h4 style={{ color:GOLD }}>Independent Services</h4>
+          <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
+            {services.map((s,i)=> (
+              <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                <div style={{ flex:1 }}>
+                  {s.name}
+                  {isResidentialNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
+                    <span style={{ color:'#7f98b0', marginLeft:8, fontSize:12 }}>(included in base)</span>
+                  ) : null}
+                </div>
+                <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
+                <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
+              </div>
+            ))} 
+            <div style={{ textAlign:'right', marginTop:8, color:GOLD }}>Services total: {formatCurrency(servicesTotal)}</div>
+          </div>
+        </section>
+
+        <section className={!addons.length ? 'no-print' : undefined} style={{ marginTop:14 }}>
+          <h4 style={{ color:GOLD }}>Add-ons</h4>
+          <AddOnRow onAdd={(desc,qty,unit)=>addAddon(desc,qty,unit)} />
+          <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
+            {addons.length===0 ? <div className='no-print' style={{ color:'#7f98b0' }}>No add-ons</div> : addons.map((a,i)=> (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                <div>{a.desc} x{a.qty}</div>
+                <div style={{ color:GOLD }}>{formatCurrency(a.qty*a.unit)}</div>
+                <div><button className='no-print' onClick={()=>removeAddon(i)} style={{ background:'transparent', border:'1px solid #233', color:'#fff', padding:4, borderRadius:4 }}>Remove</button></div>
+              </div> 
+            ))}
+            <div className={addonsTotal===0 ? 'no-print' : undefined} style={{ textAlign:'right', marginTop:8, color:GOLD }}>Add-ons total: {formatCurrency(addonsTotal)}</div>
+          </div>
+        </section>
+
+        <section style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 320px', gap:12, alignItems:'start' }}>
+          <div>
+            <div className='no-print' style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
+              <label style={{ color:'#9fb0c6', marginLeft:8 }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
+              <button className='no-print' onClick={convertToInvoice} style={{ marginLeft:8, background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
+            </div>
+
+            <div className={!notes ? 'no-print' : undefined} style={{ marginTop:12 }}>
+              <div style={{ color:'#9fb0c6', marginBottom:6 }}>Notes</div>
+              <textarea value={notes} onChange={e=>setNotes(e.target.value)} placeholder='Add project notes or scope details' style={{ width:'100%', minHeight:80, padding:8, borderRadius:6 }} />
+            </div>
+          </div>
+
+          <div style={{ background:'#041827', padding:12, borderRadius:8 }}>
+            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD }}>{formatCurrency(base)}</div></div>
+            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Houses' : 'Units'}</div><div style={{ color:'#9fb0c6' }}>{houses}</div></div>
+            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Fixtures / House' : 'Fixtures / Unit'}</div><div style={{ color:'#9fb0c6' }}>{fixturesPerHouse}</div></div>
+            <div className={servicesTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Services</div><div style={{ color:GOLD }}>{formatCurrency(servicesTotal)}</div></div>
+            <div className={addonsTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Add-ons</div><div style={{ color:GOLD }}>{formatCurrency(addonsTotal)}</div></div>
+            <hr style={{ borderColor:'rgba(255,255,255,0.04)', margin:'8px 0' }} />
+            <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700 }}><div>Total</div><div style={{ color:GOLD }}>{formatCurrency(subtotal)}</div></div>
+
+            <div className={(!showFixturesPrint || (projectType === 'New Construction' && !showNewConstructionSchedule)) ? 'no-print' : undefined} style={{ marginTop:10 }}>
+              <div style={{ color:'#9fb0c6', marginBottom:6 }}>Payment Schedule</div>
+              {projectType === 'New Construction' ? (
+                <>
+                  {includeUnderground ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>30% (Underground)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.underground)}</div></div> : null}
+                  {includeRough ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>50% (Rough-In)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.rough)}</div></div> : null}
+                  {includeTrim ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>20% (Trim)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.trim)}</div></div> : null}
+                </>
+              ) : (
+                <>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}><div>{serviceStartPercent}% (Start)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.start)}</div></div>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}><div>{serviceCompletionPercent}% (Completion)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.completion)}</div></div>
+                </>
+              )}
+            </div>
+
+            <div className='no-print' style={{ marginTop:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ color:'#9fb0c6' }}>Status: <strong style={{ color:GOLD }}>{status}</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <section className='no-print' style={{ marginTop:14 }}>
+          <h4 style={{ color:GOLD }}>Document History</h4>
+          <div style={{ background:'#041827', padding:8, borderRadius:6 }}>
+            {history.length===0 ? <div style={{ color:'#7f98b0' }}>No history</div> : history.map((h,i)=> (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                <div style={{ color:'#9fb0c6' }}>{h.entry}</div>
+                <div style={{ color:'#7f98b0' }}>{new Date(h.ts).toLocaleString()}</div>
+              </div>
+            ))}
+            <div className='no-print' style={{ marginTop:8, display:'flex', gap:8 }}>
+              <button onClick={()=>setDocStatus('sent')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Sent</button>
+              <button onClick={()=>setDocStatus('approved')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Approved</button>
+              <button onClick={()=>setDocStatus('paid')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Paid</button>
+            </div> 
+          </div>
+        </section>
+
+        <footer className='no-print' style={{ marginTop:16, borderTop:`1px solid ${GOLD}`, paddingTop:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ color:'#9fb0c6' }}>Payment due upon receipt</div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={newNumber} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>New Number</button>
+            <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
+          </div> 
+        </footer>
+        </div>
+
+        <div className='print-only'>
+          <div className='print-document'>
+            <div style={{backgroundColor:'#0a1628',padding:'32px 40px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0'}}><div style={{color:'#c9a84c',fontSize:'32px',fontWeight:'900',letterSpacing:'2px'}}>{contractor}</div><div style={{textAlign:'right'}}><div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',letterSpacing:'3px'}}>{docType==='quote'?'QUOTE':'INVOICE'}</div><div style={{color:'white',fontSize:'28px',fontWeight:'bold'}}>{docNumber}</div></div></div>
+            <div className='print-header-divider' />
+
+            <div className='print-client'>
+              <div className='print-section-title'>Client Information</div>
+              <div><strong>Client:</strong> {client || '____________________'}</div>
+              {address ? <div><strong>Address:</strong> {address}</div> : null}
+            </div>
+
+            {showFixturesPrint ? (
+              <div className='print-section'>
+                <div className='print-section-title'>Fixtures</div>
+                <table className='print-table'>
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th colSpan={2} style={{ textAlign:'right' }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>{houses} {fixtureType === 'Residential' ? 'house(s)' : 'unit(s)'} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
+                      <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(houses * fixturesPerHouse * pricePerFixture)}</td>
+                    </tr>
+                    {isResidentialNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0).map(s => (
+                      <tr key={s.id}>
+                        <td style={{ color:'#7f98b0' }}>{s.name}</td>
+                        <td colSpan={2} style={{ textAlign:'right', color:'#7f98b0' }}>{formatCurrency((s.qty||0)*s.unit)}</td>
+                      </tr>
+                    ))}
+                    <tr style={{ fontWeight:700, borderTop:'2px solid #e8e8e8' }}>
+                      <td>Base Total</td>
+                      <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(base)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {projectType === 'New Construction' && showNewConstructionSchedule ? (
+                  <table className='print-table' style={{ marginTop: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>Phase</th>
+                        <th>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {includeUnderground ? (
+                        <tr>
+                          <td>30% Underground</td>
+                          <td>{formatCurrency(phases.underground)}</td>
+                        </tr>
+                      ) : null}
+                      {includeRough ? (
+                        <tr>
+                          <td>50% Rough-In</td>
+                          <td>{formatCurrency(phases.rough)}</td>
+                        </tr>
+                      ) : null}
+                      {includeTrim ? (
+                        <tr>
+                          <td>20% Trim</td>
+                          <td>{formatCurrency(phases.trim)}</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                ) : null}
+                {projectType === 'Service/Replacement' ? (
+                  <table className='print-table' style={{ marginTop: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>Payment Schedule</th>
+                        <th>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>{serviceStartPercent}% Start</td>
+                        <td>{formatCurrency(phases.start)}</td>
+                      </tr>
+                      <tr>
+                        <td>{serviceCompletionPercent}% Completion</td>
+                        <td>{formatCurrency(phases.completion)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : null}
+                {showPrintNote ? (
+                  <div className='print-note'>
+                    <div>
+                      {docType === 'quote' ? (
+                        <>
+                          <strong>NOTE:</strong> This quote represents the total plumbing contract for {printAddress}. Payment schedule: {paymentScheduleList.map((p, idx) => (
+                            <span key={p.name}>{idx > 0 && idx === paymentScheduleList.length - 1 ? ' and ' : idx > 0 ? ', ' : ''}{p.name} ({p.pct}% - {formatCurrency(p.amount)})</span>
+                          ))}. Work will begin upon acceptance of this quote.
+                        </>
+                      ) : (
+                        <>
+                          <strong>NOTE:</strong> This invoice represents the {selectedPhaseLabel} phase payment ({selectedPhaseNames.length === 1 ? (selectedPhaseNames[0].includes('Underground') ? 30 : selectedPhaseNames[0].includes('Rough') ? 50 : 20) : Math.round(selectedPhaseAmount/base*100)}%) of the plumbing contract at {printAddress}. Total contract: {formatCurrency(base)}. Amount due this invoice: {formatCurrency(selectedPhaseAmount)}. Remaining balance after this payment: {formatCurrency(base - selectedPhaseAmount)}. Work will not commence on the next phase until this payment is received.
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {printServices.length > 0 ? (
+              <div className='print-section'>
+                <div className='print-section-title'>Independent Services</div>
+                <table className='print-table'>
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printServices.map(s=> (
+                      <tr key={s.id}>
+                        <td>{s.name}</td>
+                        <td>{s.qty}</td>
+                        <td>{formatCurrency(s.unit)}</td>
+                        <td>{formatCurrency(s.qty*s.unit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} style={{ textAlign:'right' }}>Services total</td>
+                      <td>{formatCurrency(servicesTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : null}
+
+            <div className='print-total-box'>
+              <div className='print-total-row'>
+                <span>Total</span>
+                <strong>{formatCurrency(subtotal)}</strong>
+              </div>
+            </div>
+
+            <div className='print-footer'>
+              <div>Payment due upon receipt</div>
+              <div>{contractor}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+}
+
+function AddOnRow({ onAdd }){
+  const [d, setD] = useState('')
+  const [q, setQ] = useState(1)
+  const [u, setU] = useState(0)
+  return (
+    <div className='no-print' style={{ display:'flex', gap:8, marginTop:8 }}>
+      <input placeholder='Description' value={d} onChange={e=>setD(e.target.value)} style={{ flex:2, padding:8 }} />
+      <input type='number' value={q} onChange={e=>setQ(Number(e.target.value)||0)} style={{ width:80, padding:8 }} />
+      <input type='text' value={formatMoneyInput(u)} onChange={e=>setU(parseMoneyInput(e.target.value))} style={{ width:120, padding:8 }} />
+      <button onClick={()=>{ if(d) { onAdd(d,q,u); setD(''); setQ(1); setU(0) } }} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Add</button>
+    </div> 
+  )
+}
