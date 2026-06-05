@@ -156,34 +156,6 @@ export default function AppNew(){
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
-  // Use an already-fetched document row to populate the form state
-  function openDocument(doc){
-    if (!doc) return
-    if (doc.raw_counter != null) counter.reset(doc.raw_counter)
-    setSavedDocId(doc.id ?? null)
-    setContractor(doc.contractor ?? 'MVP Solutions')
-    setShowLogo(doc.show_logo ?? true)
-    setDocType(doc.doc_type ?? 'quote')
-    setClient(doc.client ?? '')
-    setAddress(doc.address ?? '')
-    setHouses(doc.houses ?? 1)
-    setFixturesPerHouse(doc.fixtures_per_house ?? 1)
-    setPricePerFixture(doc.price_per_fixture ?? 120)
-    setFixtureType(doc.fixture_type ?? 'Residential')
-    setProjectType(doc.project_type ?? 'New Construction')
-    setIncludeUnderground(doc.include_underground ?? true)
-    setIncludeRough(doc.include_rough ?? true)
-    setIncludeTrim(doc.include_trim ?? true)
-    setServiceStartPercent(doc.service_start_percent ?? 50)
-    setServiceCompletionPercent(doc.service_completion_percent ?? 50)
-    setServices(doc.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
-    setAddons(doc.addons ?? [])
-    setNotes(doc.notes ?? '')
-    setHistory(doc.history ?? [])
-    setStatus(doc.status ?? 'draft')
-    setSaveMessage(`Loaded document ${doc.doc_number || doc.id || ''}`)
-  }
-
   async function loadDocumentById(id){
     const { data, error } = await supabase
       .from('documents')
@@ -196,13 +168,7 @@ export default function AppNew(){
       return
     }
     if (!data) return
-
-    // Apply document fields into form state
     applyDocumentData(data)
-
-    // Refresh saved docs list (in case metadata changed)
-    try { await fetchSavedDocs() } catch (e) { /* ignore */ }
-    setSaveMessage(`Loaded document ${data.doc_number || data.id}`)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -540,7 +506,7 @@ export default function AppNew(){
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.contractor || '—'}</td>
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.doc_type || 'quote'}</td>
                     <td style={{ padding:'10px', color:'#7f98b0' }}>{doc.created_at ? new Date(doc.created_at).toLocaleString() : '—'}</td>
-                    <td style={{ padding:'10px' }}><button type='button' onClick={() => { console.log('Opening doc:', doc); setContractor(doc.contractor || ''); setClient(doc.client || ''); setAddress(doc.address || ''); setHouses(doc.houses || 1); setFixturesPerHouse(doc.fixtures_per_house || 1); setPricePerFixture(doc.price_per_fixture || 120); setProjectType(doc.project_type || 'New Construction'); setDocType(doc.doc_type || 'quote'); window.scrollTo(0,0); }} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button></td>
+                    <td style={{ padding:'10px' }}><button onClick={()=>loadDocumentById(doc.id)} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button></td>
                   </tr>
                 ))}
               </tbody>
