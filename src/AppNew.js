@@ -529,6 +529,36 @@ export default function AppNew(){
   function addAddon(desc, qty, unit){ setAddons(a=>[...a, { desc, qty, unit }]); pushHistory('addon:added') }
   function removeAddon(i){ setAddons(a=> a.filter((_,idx)=>idx!==i)); pushHistory('addon:removed') }
 
+  function sendEmail(){
+    const subject = `${docNumber} - ${contractor}`
+    const paymentLines = []
+    if (projectType === 'New Construction') {
+      if (includeUnderground) paymentLines.push(`  - 30% Underground: ${formatCurrency(schedule.underground)}`)
+      if (includeRough) paymentLines.push(`  - 50% Rough-In: ${formatCurrency(schedule.rough)}`)
+      if (includeTrim) paymentLines.push(`  - 20% Trim: ${formatCurrency(schedule.trim)}`)
+    } else {
+      paymentLines.push(`  - ${serviceStartPercent}% Start: ${formatCurrency(schedule.start)}`)
+      paymentLines.push(`  - ${serviceCompletionPercent}% Completion: ${formatCurrency(schedule.completion)}`)
+    }
+    const bodyParts = [
+      `Dear ${client || 'Client'},`,
+      '',
+      `Please find your ${docType === 'invoice' ? 'invoice' : 'quote'} details below.`,
+      '',
+      `Document: ${docNumber}`,
+      client ? `Client: ${client}` : null,
+      address ? `Address: ${address}` : null,
+      `Total: ${formatCurrency(subtotal)}`,
+      '',
+      'Payment Schedule:',
+      ...paymentLines,
+    ]
+    if (notes) bodyParts.push('', `Notes: ${notes}`)
+    bodyParts.push('', 'Please contact us if you have any questions.', '', contractor)
+    const body = bodyParts.filter(l => l !== null).join('\n')
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  }
+
   if (authLoading || (user && !profileChecked)) {
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -627,6 +657,7 @@ export default function AppNew(){
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
             <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
+            <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
           </div>
