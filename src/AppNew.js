@@ -28,6 +28,7 @@ const SERVICES = [
 ]
 
 const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater']
+const ALWAYS_PCT_IDS  = ['manablok']
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
 function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
@@ -91,12 +92,15 @@ export default function AppNew(){
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
+  const manablokIdx = services.findIndex(s => s.id === 'manablok')
+  const manablok = manablokIdx >= 0 ? services[manablokIdx] : null
 
   const isNewConstruction = projectType === 'New Construction'
   const baseServiceAmount = services.reduce((sum,s) => {
     if (!isNewConstruction) return sum
-    if (!BASE_SERVICE_IDS.includes(s.id)) return sum
-    if ((s.billingMode ?? 'pct') !== 'pct') return sum
+    const isTogglePct = BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct'
+    const isAlwaysPct = ALWAYS_PCT_IDS.includes(s.id)
+    if (!isTogglePct && !isAlwaysPct) return sum
     return sum + ((s.enabled ? (s.qty||0) : 0) * (s.unit||0))
   }, 0)
   const base = houses * fixturesPerHouse * pricePerFixture + baseServiceAmount
@@ -131,9 +135,15 @@ export default function AppNew(){
 
   const servicesTotal = useMemo(()=> services.reduce((s,it)=> {
     if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return s
+    if (isNewConstruction && ALWAYS_PCT_IDS.includes(it.id)) return s
     return s + (it.enabled ? (it.qty||0)*(it.unit||0) : 0)
   }, 0), [services, isNewConstruction])
-  const printServices = services.filter(s => s.enabled && s.qty>0 && !(isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct'))
+  const printServices = services.filter(s => {
+    if (!s.enabled || !s.qty) return false
+    if (isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct') return false
+    if (isNewConstruction && ALWAYS_PCT_IDS.includes(s.id)) return false
+    return true
+  })
   const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
   const subtotal = base + servicesTotal + addonsTotal
   const isPhaseInvoice = docType === 'invoice' && projectType === 'New Construction' && selectedPhaseNames.length > 0
@@ -768,6 +778,15 @@ export default function AppNew(){
             <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
             <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
           </div>
+          {isNewConstruction && manablok ? (
+            <div className={!manablok.enabled || !(manablok.qty||0) ? 'no-print' : undefined} style={{ marginTop:8, display:'flex', gap:8, alignItems:'center', padding:'6px 4px', borderTop:'1px solid rgba(255,255,255,0.06)' }}>
+              <input className='no-print' type='checkbox' checked={manablok.enabled} onChange={e=>toggleService(manablokIdx, e.target.checked)} />
+              <span style={{ flex:1, color:'#9fb0c6' }}>Manablok System <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span></span>
+              <input className='no-print' type='number' value={manablok.qty} disabled={!manablok.enabled} onChange={e=>updateService(manablokIdx,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
+              <input className='no-print' type='text' value={formatMoneyInput(manablok.unit)} disabled={!manablok.enabled} onChange={e=>updateService(manablokIdx,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+              <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(manablok.enabled ? (manablok.qty||0)*manablok.unit : 0)}</div>
+            </div>
+          ) : null}
           <div style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
             {projectType === 'New Construction' ? (
               <>
@@ -804,7 +823,9 @@ export default function AppNew(){
         <section className={servicesTotal===0 ? 'no-print' : undefined} style={{ marginTop:14 }}>
           <h4 style={{ color:GOLD }}>Independent Services</h4>
           <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
-            {services.map((s,i)=> (
+            {services.map((s,i)=> {
+              if (isNewConstruction && ALWAYS_PCT_IDS.includes(s.id)) return null
+              return (
               <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
                 <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
                 <div style={{ flex:1 }}>
@@ -825,7 +846,8 @@ export default function AppNew(){
                 <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
                 <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
               </div>
-            ))} 
+              )
+            })}
             <div style={{ textAlign:'right', marginTop:8, color:GOLD }}>Services total: {formatCurrency(servicesTotal)}</div>
           </div>
         </section>
@@ -982,7 +1004,7 @@ export default function AppNew(){
                       <td>{houses} {fixtureType === 'Residential' ? 'house(s)' : 'unit(s)'} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
                       <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(houses * fixturesPerHouse * pricePerFixture)}</td>
                     </tr>
-                    {isNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0 && (s.billingMode ?? 'pct') === 'pct').map(s => (
+                    {isNewConstruction && services.filter(s=>s.enabled && s.qty>0 && (ALWAYS_PCT_IDS.includes(s.id) || (BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct'))).map(s => (
                       <tr key={s.id}>
                         <td style={{ color:'#7f98b0' }}>{s.name}</td>
                         <td colSpan={2} style={{ textAlign:'right', color:'#7f98b0' }}>{formatCurrency((s.qty||0)*s.unit)}</td>
