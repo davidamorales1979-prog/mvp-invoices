@@ -46,6 +46,11 @@ export default function AppNew(){
   const [showLogo, setShowLogo] = useState(true)
   const [docType, setDocType] = useState('quote')
   const docNumber = formatDocNumber(counter.raw, docType)
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authMessage, setAuthMessage] = useState('')
 
   const [client, setClient] = useState('')
   const [address, setAddress] = useState('')
@@ -121,9 +126,11 @@ export default function AppNew(){
   }, [subtotal, projectType])
 
   const fetchSavedDocs = useCallback(async () => {
+    if (!user) return
     const { data, error } = await supabase
       .from('documents')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -131,7 +138,34 @@ export default function AppNew(){
       return
     }
     setSavedDocs(data || [])
-  }, [])
+  }, [user])
+
+  async function signUp(){
+    setAuthMessage('')
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      setAuthMessage(error.message)
+      return
+    }
+    setAuthMessage('Signup successful — check your email to confirm or sign in.')
+  }
+
+  async function signIn(){
+    setAuthMessage('')
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setAuthMessage(error.message)
+      return
+    }
+    setAuthMessage('Signed in successfully')
+    setUser(data.user)
+  }
+
+  async function signOut(){
+    await supabase.auth.signOut()
+    setUser(null)
+    setAuthMessage('Logged out')
+  }
 
   function applyDocumentData(data){
     if (data.raw_counter != null) counter.reset(data.raw_counter)
@@ -170,7 +204,7 @@ export default function AppNew(){
   async function deleteDocument(id){
     if (!id) return
     if (!window.confirm('Delete this document?')) return
-    const { error } = await supabase.from('documents').delete().eq('id', id)
+    const { error } = await supabase.from('documents').delete().eq('id', id).eq('user_id', user?.id)
     if (error) {
       console.error('Supabase delete error:', error)
       setSaveMessage('Delete failed')
@@ -181,11 +215,41 @@ export default function AppNew(){
   }
 
   useEffect(() => {
+    async function initAuth(){
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('Supabase auth session error:', error)
+        }
+        setUser(data?.session?.user ?? null)
+      } catch (e) {
+        console.error('Error getting auth session', e)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+
+    initAuth()
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => {
+      if (authListener?.subscription?.unsubscribe) {
+        authListener.subscription.unsubscribe()
+      } else if (authListener?.unsubscribe) {
+        authListener.unsubscribe()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     async function getMaxRawCounter(){
+      if (!user) return null
       try{
         const { data, error } = await supabase
           .from('documents')
           .select('raw_counter')
+          .eq('user_id', user.id)
           .order('raw_counter', { ascending: false })
           .limit(1)
 
@@ -202,9 +266,11 @@ export default function AppNew(){
     }
 
     async function loadLastDocument() {
+      if (!user) return
       const { data, error } = await supabase
         .from('documents')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -241,13 +307,14 @@ export default function AppNew(){
     }
 
     async function init() {
+      if (!user) return
       const max = await getMaxRawCounter()
       const start = (max != null && typeof max === 'number') ? (max + 1) : 1
       try { reset(start) } catch (e) { /* ignore */ }
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
     init()
-  }, [reset, fetchSavedDocs])
+  }, [reset, fetchSavedDocs, user])
 
   async function persistDocument(overrides = {}){
     const payload = {
@@ -272,13 +339,14 @@ export default function AppNew(){
       history,
       status,
       total: subtotal,
+      user_id: user?.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
       ...overrides
     }
 
     if (savedDocId) {
-      const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId)
+      const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', user?.id)
       if (error) {
         console.error('Supabase update error:', error)
         return false
@@ -320,11 +388,13 @@ export default function AppNew(){
   async function newNumber(){
     // Determine next raw counter based on the highest value in Supabase
     try{
-      const { data, error } = await supabase
+      const query = supabase
         .from('documents')
         .select('raw_counter')
         .order('raw_counter', { ascending: false })
         .limit(1)
+
+      const { data, error } = user ? await query.eq('user_id', user.id) : await query
 
       let next
       if (!error && Array.isArray(data) && data.length > 0 && data[0].raw_counter != null) {
@@ -372,6 +442,37 @@ export default function AppNew(){
   function addAddon(desc, qty, unit){ setAddons(a=>[...a, { desc, qty, unit }]); pushHistory('addon:added') }
   function removeAddon(i){ setAddons(a=> a.filter((_,idx)=>idx!==i)); pushHistory('addon:removed') }
 
+  if (authLoading) {
+    return (
+      <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ textAlign:'center' }}>Loading...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ width:360, padding:24, background:'#071827', borderRadius:12, boxShadow:'0 10px 40px rgba(0,0,0,0.4)' }}>
+          <h2 style={{ color:GOLD, marginBottom:12 }}>Login or Sign Up</h2>
+          <div style={{ marginBottom:12 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Email</label>
+            <input type='email' value={email} onChange={e=>setEmail(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
+          </div>
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Password</label>
+            <input type='password' value={password} onChange={e=>setPassword(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
+          </div>
+          {authMessage ? <div style={{ color:GOLD, marginBottom:12 }}>{authMessage}</div> : null}
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            <button onClick={signIn} style={{ flex:1, padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none' }}>Sign In</button>
+            <button onClick={signUp} style={{ flex:1, padding:10, borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}` }}>Sign Up</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
@@ -404,7 +505,9 @@ export default function AppNew(){
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
             <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
+            <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
           </div>
+          <div style={{ marginLeft:'auto', color:'#9fb0c6' }}>{user?.email}</div>
           {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700 }}>{saveMessage}</div> : null}
         </div> 
 
