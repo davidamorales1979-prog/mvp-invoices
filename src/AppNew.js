@@ -51,6 +51,14 @@ export default function AppNew(){
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
+  const [profile, setProfile] = useState(null)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileChecked, setProfileChecked] = useState(false)
+  const [profileMessage, setProfileMessage] = useState('')
+  const [profileCompany, setProfileCompany] = useState('')
+  const [profileName1, setProfileName1] = useState('')
+  const [profileName2, setProfileName2] = useState('')
+  const [profileName3, setProfileName3] = useState('')
 
   const [client, setClient] = useState('')
   const [address, setAddress] = useState('')
@@ -74,6 +82,9 @@ export default function AppNew(){
   const [savedDocId, setSavedDocId] = useState(null)
   const [saveMessage, setSaveMessage] = useState('')
   const [savedDocs, setSavedDocs] = useState([])
+
+  const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
+  const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
 
   const isResidentialNewConstruction = projectType === 'New Construction' && fixtureType === 'Residential'
   const baseServiceAmount = services.reduce((sum,s) => {
@@ -164,7 +175,75 @@ export default function AppNew(){
   async function signOut(){
     await supabase.auth.signOut()
     setUser(null)
+    setProfile(null)
+    setProfileChecked(false)
     setAuthMessage('Logged out')
+  }
+
+  async function loadProfile(){
+    if (!user) return
+    setProfileLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (error) {
+        console.error('Supabase load profile error:', error)
+        return
+      }
+      if (data) {
+        setProfile(data)
+        setProfileCompany(data.company_name || '')
+        setProfileName1(data.name1 || '')
+        setProfileName2(data.name2 || '')
+        setProfileName3(data.name3 || '')
+        setContractor(data.name1 || data.company_name || 'MVP Solutions')
+      } else {
+        setProfile(null)
+      }
+    } catch (e) {
+      console.error('Error loading profile', e)
+    } finally {
+      setProfileLoading(false)
+      setProfileChecked(true)
+    }
+  }
+
+  async function saveProfile(){
+    setProfileMessage('')
+    if (!user) {
+      setProfileMessage('Please sign in first.')
+      return
+    }
+    if (!profileCompany.trim() || !profileName1.trim()) {
+      setProfileMessage('Please enter a company name and at least one contractor name.')
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert([{
+          user_id: user.id,
+          company_name: profileCompany.trim(),
+          name1: profileName1.trim() || null,
+          name2: profileName2.trim() || null,
+          name3: profileName3.trim() || null
+        }], { onConflict: 'user_id' })
+        .select()
+        .maybeSingle()
+      if (error) {
+        setProfileMessage(error.message)
+        return
+      }
+      setProfile(data)
+      setContractor(data.name1 || data.company_name)
+      setProfileMessage('Profile saved successfully')
+    } catch (e) {
+      console.error('Error saving profile', e)
+      setProfileMessage('Unable to save profile.')
+    }
   }
 
   function applyDocumentData(data){
@@ -241,6 +320,14 @@ export default function AppNew(){
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (user) {
+      loadProfile()
+    } else {
+      setProfileChecked(false)
+    }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function getMaxRawCounter(){
@@ -414,7 +501,7 @@ export default function AppNew(){
     // Reset all form fields to defaults
     setSavedDocId(null)
     setSaveMessage('')
-    setContractor('MVP Solutions')
+    setContractor(defaultContractor)
     setShowLogo(true)
     setDocType('quote')
     setClient('')
@@ -442,7 +529,7 @@ export default function AppNew(){
   function addAddon(desc, qty, unit){ setAddons(a=>[...a, { desc, qty, unit }]); pushHistory('addon:added') }
   function removeAddon(i){ setAddons(a=> a.filter((_,idx)=>idx!==i)); pushHistory('addon:removed') }
 
-  if (authLoading) {
+  if (authLoading || (user && !profileChecked)) {
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ textAlign:'center' }}>Loading...</div>
@@ -473,6 +560,42 @@ export default function AppNew(){
     )
   }
 
+  if (!profile) {
+    return (
+      <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ width:420, padding:28, background:'#071827', borderRadius:12, boxShadow:'0 10px 40px rgba(0,0,0,0.4)' }}>
+          <h2 style={{ color:GOLD, marginBottom:6 }}>Welcome! Set Up Your Profile</h2>
+          <p style={{ color:'#9fb0c6', marginBottom:20, fontSize:14 }}>Signed in as {user.email}</p>
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Company Name *</label>
+            <input value={profileCompany} onChange={e=>setProfileCompany(e.target.value)} placeholder='Your company name' style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223', boxSizing:'border-box', background:'#0a1e32', color:'#fff' }} />
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Contractor Name 1 *</label>
+            <input value={profileName1} onChange={e=>setProfileName1(e.target.value)} placeholder='e.g. John Smith' style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223', boxSizing:'border-box', background:'#0a1e32', color:'#fff' }} />
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Contractor Name 2 <span style={{ color:'#7f98b0', fontWeight:400 }}>(optional)</span></label>
+            <input value={profileName2} onChange={e=>setProfileName2(e.target.value)} placeholder='e.g. Jane Smith' style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223', boxSizing:'border-box', background:'#0a1e32', color:'#fff' }} />
+          </div>
+          <div style={{ marginBottom:22 }}>
+            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Contractor Name 3 <span style={{ color:'#7f98b0', fontWeight:400 }}>(optional)</span></label>
+            <input value={profileName3} onChange={e=>setProfileName3(e.target.value)} placeholder='e.g. Bob Smith' style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223', boxSizing:'border-box', background:'#0a1e32', color:'#fff' }} />
+          </div>
+          {profileMessage ? <div style={{ color: profileMessage.includes('success') ? '#4caf50' : GOLD, marginBottom:14 }}>{profileMessage}</div> : null}
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={saveProfile} disabled={profileLoading} style={{ flex:1, padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
+              {profileLoading ? 'Saving…' : 'Save & Continue'}
+            </button>
+            <button onClick={signOut} style={{ padding:10, borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
@@ -495,9 +618,9 @@ export default function AppNew(){
 
         <div className='screen-only'>
           <div className='no-print' style={{ marginTop:12, display:'flex', gap:8, alignItems:'center' }}>
-          <button onClick={()=>setContractor('David Morales')} style={{ padding:8, borderRadius:6, background: contractor==='David Morales' ? GOLD : '#0f2740' }}>David Morales</button>
-          <button onClick={()=>setContractor('Alejandro Morales')} style={{ padding:8, borderRadius:6, background: contractor==='Alejandro Morales' ? GOLD : '#0f2740' }}>Alejandro Morales</button>
-          <button onClick={()=>setContractor('MVP Solutions')} style={{ padding:8, borderRadius:6, background: contractor==='MVP Solutions' ? GOLD : '#0f2740' }}>MVP Solutions</button>
+          {contractorNames.map(name => (
+            <button key={name} onClick={()=>setContractor(name)} style={{ padding:8, borderRadius:6, background: contractor===name ? GOLD : '#0f2740', color: contractor===name ? NAVY : '#fff' }}>{name}</button>
+          ))}
           <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
             <label style={{ color:'#9fb0c6' }}><input type='checkbox' checked={showLogo} onChange={e=>setShowLogo(e.target.checked)} /> Show logo</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
