@@ -129,6 +129,8 @@ export default function AppNew(){
   const printServices = services.filter(s => s.enabled && s.qty>0 && !(isResidentialNewConstruction && BASE_SERVICE_IDS.includes(s.id)))
   const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
   const subtotal = base + servicesTotal + addonsTotal
+  const isPhaseInvoice = docType === 'invoice' && projectType === 'New Construction' && selectedPhaseNames.length > 0
+  const displayTotal = isPhaseInvoice ? selectedPhaseAmount + servicesTotal : subtotal
   const schedule = useMemo(() => {
     if (projectType === 'New Construction') {
       return { underground: subtotal*0.3, rough: subtotal*0.5, trim: subtotal*0.2 }
@@ -425,7 +427,7 @@ export default function AppNew(){
       notes,
       history,
       status,
-      total: subtotal,
+      total: displayTotal,
       user_id: user?.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
@@ -548,7 +550,7 @@ export default function AppNew(){
       `Document: ${docNumber}`,
       client ? `Client: ${client}` : null,
       address ? `Address: ${address}` : null,
-      `Total: ${formatCurrency(subtotal)}`,
+      `Total: ${formatCurrency(displayTotal)}`,
       '',
       'Payment Schedule:',
       ...paymentLines,
@@ -775,7 +777,7 @@ export default function AppNew(){
             <div className={servicesTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Services</div><div style={{ color:GOLD }}>{formatCurrency(servicesTotal)}</div></div>
             <div className={addonsTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Add-ons</div><div style={{ color:GOLD }}>{formatCurrency(addonsTotal)}</div></div>
             <hr style={{ borderColor:'rgba(255,255,255,0.04)', margin:'8px 0' }} />
-            <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700 }}><div>Total</div><div style={{ color:GOLD }}>{formatCurrency(subtotal)}</div></div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontWeight:700 }}><div>Total</div><div style={{ color:GOLD }}>{formatCurrency(displayTotal)}</div></div>
 
             <div className={(!showFixturesPrint || (projectType === 'New Construction' && !showNewConstructionSchedule)) ? 'no-print' : undefined} style={{ marginTop:10 }}>
               <div style={{ color:'#9fb0c6', marginBottom:6 }}>Payment Schedule</div>
@@ -1008,7 +1010,7 @@ export default function AppNew(){
             <div className='print-total-box'>
               <div className='print-total-row'>
                 <span>Total</span>
-                <strong>{formatCurrency(subtotal)}</strong>
+                <strong>{formatCurrency(displayTotal)}</strong>
               </div>
             </div>
 
