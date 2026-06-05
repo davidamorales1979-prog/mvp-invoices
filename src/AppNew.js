@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import './App.css'
 import { supabase } from './supabase'
 
@@ -8,7 +8,9 @@ const GOLD = '#c9a84c'
 function useCounter(key = 'mvp_invoice_counter_v1') {
   const [n, setN] = useState(() => Number(localStorage.getItem(key) || 1001))
   useEffect(() => { localStorage.setItem(key, String(n)) }, [key, n])
-  return { bump: () => setN(x => x + 1), raw: n, reset: (v=1001)=>setN(v) }
+  const bump = useCallback(() => setN(x => x + 1), [])
+  const reset = useCallback((v = 1001) => setN(v), [])
+  return useMemo(() => ({ bump, raw: n, reset }), [bump, reset, n])
 }
 
 const SERVICES = [
@@ -39,6 +41,7 @@ function formatDocNumber(raw, type){
 
 export default function AppNew(){
   const counter = useCounter()
+  const { reset } = counter
   const [contractor, setContractor] = useState('MVP Solutions')
   const [showLogo, setShowLogo] = useState(true)
   const [docType, setDocType] = useState('quote')
@@ -117,7 +120,7 @@ export default function AppNew(){
     return { start: subtotal*0.5, completion: subtotal*0.5 }
   }, [subtotal, projectType])
 
-  async function fetchSavedDocs(){
+  const fetchSavedDocs = useCallback(async () => {
     const { data, error } = await supabase
       .from('documents')
       .select('*')
@@ -128,7 +131,7 @@ export default function AppNew(){
       return
     }
     setSavedDocs(data || [])
-  }
+  }, [])
 
   function applyDocumentData(data){
     if (data.raw_counter != null) counter.reset(data.raw_counter)
@@ -159,51 +162,10 @@ export default function AppNew(){
   // Use an already-fetched document row to populate the form state
   function openDocument(doc){
     if (!doc) return
-    if (doc.raw_counter != null) counter.reset(doc.raw_counter)
-    setSavedDocId(doc.id ?? null)
-    setContractor(doc.contractor ?? 'MVP Solutions')
-    setShowLogo(doc.show_logo ?? true)
-    setDocType(doc.doc_type ?? 'quote')
-    setClient(doc.client ?? '')
-    setAddress(doc.address ?? '')
-    setHouses(doc.houses ?? 1)
-    setFixturesPerHouse(doc.fixtures_per_house ?? 1)
-    setPricePerFixture(doc.price_per_fixture ?? 120)
-    setFixtureType(doc.fixture_type ?? 'Residential')
-    setProjectType(doc.project_type ?? 'New Construction')
-    setIncludeUnderground(doc.include_underground ?? true)
-    setIncludeRough(doc.include_rough ?? true)
-    setIncludeTrim(doc.include_trim ?? true)
-    setServiceStartPercent(doc.service_start_percent ?? 50)
-    setServiceCompletionPercent(doc.service_completion_percent ?? 50)
-    setServices(doc.services || SERVICES.map(s => ({ ...s, qty: 0 })))
-    setAddons(doc.addons || [])
-    setHistory(doc.history || [])
-    setNotes(doc.notes || '')
-    setStatus(doc.status || 'draft')
-    setSaveMessage(`Loaded document ${doc.doc_number || doc.id || ''}`)
+    applyDocumentData(doc)
   }
 
-  async function loadDocumentById(id){
-    const { data, error } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (error) {
-      console.error('Supabase load document error:', error)
-      return
-    }
-    if (!data) return
-
-    // Apply document fields into form state
-    applyDocumentData(data)
-
-    // Refresh saved docs list (in case metadata changed)
-    try { await fetchSavedDocs() } catch (e) { /* ignore */ }
-    setSaveMessage(`Loaded document ${data.doc_number || data.id}`)
-  }
+  
 
   async function deleteDocument(id){
     if (!id) return
@@ -218,7 +180,6 @@ export default function AppNew(){
     setSaveMessage('Document deleted')
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     async function getMaxRawCounter(){
       try{
@@ -282,12 +243,11 @@ export default function AppNew(){
     async function init() {
       const max = await getMaxRawCounter()
       const start = (max != null && typeof max === 'number') ? (max + 1) : 1
-      try { counter.reset(start) } catch (e) { /* ignore */ }
+      try { reset(start) } catch (e) { /* ignore */ }
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
-
     init()
-  }, [])
+  }, [reset, fetchSavedDocs])
 
   async function persistDocument(overrides = {}){
     const payload = {
@@ -311,6 +271,7 @@ export default function AppNew(){
       notes,
       history,
       status,
+      total: subtotal,
       doc_number: docNumber,
       raw_counter: counter.raw,
       ...overrides
@@ -610,13 +571,14 @@ export default function AppNew(){
                   <th style={{ textAlign:'left', padding:'10px', color:'#c9a84c' }}>Client</th>
                   <th style={{ textAlign:'left', padding:'10px', color:'#c9a84c' }}>Contractor</th>
                   <th style={{ textAlign:'left', padding:'10px', color:'#c9a84c' }}>Type</th>
+                  <th style={{ textAlign:'left', padding:'10px', color:'#c9a84c' }}>Total</th>
                   <th style={{ textAlign:'left', padding:'10px', color:'#c9a84c' }}>Created</th>
                   <th style={{ padding:'10px', color:'#c9a84c' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {savedDocs.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding:'12px', color:'#7f98b0' }}>No saved documents found</td></tr>
+                  <tr><td colSpan={8} style={{ padding:'12px', color:'#7f98b0' }}>No saved documents found</td></tr>
                 ) : savedDocs.map(doc => (
                   <tr key={doc.id} style={{ borderTop:'1px solid rgba(255,255,255,0.08)' }}>
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.id}</td>
@@ -624,6 +586,7 @@ export default function AppNew(){
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.client || '—'}</td>
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.contractor || '—'}</td>
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.doc_type || 'quote'}</td>
+                    <td style={{ padding:'10px', color:GOLD, textAlign:'right' }}>{doc.total != null ? formatCurrency(doc.total) : '-'}</td>
                     <td style={{ padding:'10px', color:'#7f98b0' }}>{doc.created_at ? new Date(doc.created_at).toLocaleString() : '—'}</td>
                     <td style={{ padding:'10px', display:'flex', gap:8 }}>
                       <button type='button' onClick={() => openDocument(doc)} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button>
