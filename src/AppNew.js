@@ -205,15 +205,49 @@ export default function AppNew(){
     setSaveMessage(`Loaded document ${data.doc_number || data.id}`)
   }
 
+  async function deleteDocument(id){
+    if (!id) return
+    if (!window.confirm('Delete this document?')) return
+    const { error } = await supabase.from('documents').delete().eq('id', id)
+    if (error) {
+      console.error('Supabase delete error:', error)
+      setSaveMessage('Delete failed')
+      return
+    }
+    await fetchSavedDocs()
+    setSaveMessage('Document deleted')
+  }
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    async function getMaxRawCounter(){
+      try{
+        const { data, error } = await supabase
+          .from('documents')
+          .select('raw_counter')
+          .order('raw_counter', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (error) {
+          console.error('Supabase max raw_counter error:', error)
+          return null
+        }
+        // If there are no documents or raw_counter is missing, return null
+        if (!data || data.raw_counter == null) return null
+        return data.raw_counter
+      } catch (e) {
+        console.error('Error fetching max raw_counter', e)
+        return null
+      }
+    }
+
     async function loadLastDocument() {
       const { data, error } = await supabase
         .from('documents')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error('Supabase load error:', error)
@@ -221,7 +255,8 @@ export default function AppNew(){
       }
       if (!data) return
 
-      if (data.raw_counter != null) counter.reset(data.raw_counter)
+      // Do NOT reset the counter to the document's raw_counter on mount —
+      // the counter should start at max(raw_counter)+1 instead.
       setSavedDocId(data.id ?? null)
       setContractor(data.contractor ?? 'MVP Solutions')
       setShowLogo(data.show_logo ?? true)
@@ -246,6 +281,9 @@ export default function AppNew(){
     }
 
     async function init() {
+      const max = await getMaxRawCounter()
+      const start = (max != null && typeof max === 'number') ? (max + 1) : 1
+      try { counter.reset(start) } catch (e) { /* ignore */ }
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
 
@@ -319,7 +357,56 @@ export default function AppNew(){
     }
   }
   function printDoc(){ pushHistory('printed'); window.print() }
-  function newNumber(){ counter.reset(); pushHistory('reset:number') }
+  async function newNumber(){
+    // Determine next raw counter based on the highest value in Supabase
+    try{
+      const { data, error } = await supabase
+        .from('documents')
+        .select('raw_counter')
+        .order('raw_counter', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let next
+      if (!error && data && data.raw_counter != null) {
+        next = data.raw_counter + 1
+      } else if (!error && (!data || data.raw_counter == null)) {
+        // No documents exist — start at 1
+        next = 1
+      } else {
+        next = counter.raw + 1
+      }
+      counter.reset(next)
+    } catch (e) {
+      // fallback: increment local counter
+      counter.reset(counter.raw + 1)
+    }
+
+    // Reset all form fields to defaults
+    setSavedDocId(null)
+    setSaveMessage('')
+    setContractor('MVP Solutions')
+    setShowLogo(true)
+    setDocType('quote')
+    setClient('')
+    setAddress('')
+    setHouses(1)
+    setFixturesPerHouse(1)
+    setPricePerFixture(120)
+    setFixtureType('Residential')
+    setProjectType('New Construction')
+    setIncludeUnderground(true)
+    setIncludeRough(true)
+    setIncludeTrim(true)
+    setServiceStartPercent(50)
+    setServiceCompletionPercent(50)
+    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+    setAddons([])
+    setNotes('')
+    setHistory([])
+    setStatus('draft')
+    pushHistory('reset:number')
+  }
 
   function toggleService(i, enabled){ setServices(s=>{ const c=[...s]; c[i].enabled = enabled; return c }) }
   function updateService(i, field, value){ setServices(s=>{ const c=[...s]; c[i] = { ...c[i], [field]: value }; return c }) }
@@ -540,7 +627,10 @@ export default function AppNew(){
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.contractor || '—'}</td>
                     <td style={{ padding:'10px', color:'#fff' }}>{doc.doc_type || 'quote'}</td>
                     <td style={{ padding:'10px', color:'#7f98b0' }}>{doc.created_at ? new Date(doc.created_at).toLocaleString() : '—'}</td>
-                    <td style={{ padding:'10px' }}><button type='button' onClick={() => { console.log('Opening doc:', doc); setContractor(doc.contractor || ''); setClient(doc.client || ''); setAddress(doc.address || ''); setHouses(doc.houses || 1); setFixturesPerHouse(doc.fixtures_per_house || 1); setPricePerFixture(doc.price_per_fixture || 120); setProjectType(doc.project_type || 'New Construction'); setDocType(doc.doc_type || 'quote'); window.scrollTo(0,0); }} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button></td>
+                    <td style={{ padding:'10px', display:'flex', gap:8 }}>
+                      <button type='button' onClick={() => openDocument(doc)} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button>
+                      <button type='button' onClick={() => deleteDocument(doc.id)} style={{ background:'#7a0a0a', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Delete</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
