@@ -227,14 +227,13 @@ export default function AppNew(){
           .select('raw_counter')
           .order('raw_counter', { ascending: false })
           .limit(1)
-          .maybeSingle()
+
         if (error) {
           console.error('Supabase max raw_counter error:', error)
           return null
         }
-        // If there are no documents or raw_counter is missing, return null
-        if (!data || data.raw_counter == null) return null
-        return data.raw_counter
+        if (!Array.isArray(data) || data.length === 0 || data[0].raw_counter == null) return null
+        return data[0].raw_counter
       } catch (e) {
         console.error('Error fetching max raw_counter', e)
         return null
@@ -365,12 +364,11 @@ export default function AppNew(){
         .select('raw_counter')
         .order('raw_counter', { ascending: false })
         .limit(1)
-        .maybeSingle()
 
       let next
-      if (!error && data && data.raw_counter != null) {
-        next = data.raw_counter + 1
-      } else if (!error && (!data || data.raw_counter == null)) {
+      if (!error && Array.isArray(data) && data.length > 0 && data[0].raw_counter != null) {
+        next = data[0].raw_counter + 1
+      } else if (!error && (!Array.isArray(data) || data.length === 0 || data[0]?.raw_counter == null)) {
         // No documents exist — start at 1
         next = 1
       } else {
