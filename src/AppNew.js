@@ -176,11 +176,11 @@ export default function AppNew(){
     setIncludeTrim(doc.include_trim ?? true)
     setServiceStartPercent(doc.service_start_percent ?? 50)
     setServiceCompletionPercent(doc.service_completion_percent ?? 50)
-    setServices(doc.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
-    setAddons(doc.addons ?? [])
-    setNotes(doc.notes ?? '')
-    setHistory(doc.history ?? [])
-    setStatus(doc.status ?? 'draft')
+    setServices(doc.services || SERVICES.map(s => ({ ...s, qty: 0 })))
+    setAddons(doc.addons || [])
+    setHistory(doc.history || [])
+    setNotes(doc.notes || '')
+    setStatus(doc.status || 'draft')
     setSaveMessage(`Loaded document ${doc.doc_number || doc.id || ''}`)
   }
 
