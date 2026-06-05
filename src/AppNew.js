@@ -30,6 +30,7 @@ const SERVICES = [
 const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater']
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
+function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
 function formatMoneyInput(n){ return '$' + (Number(n || 0).toString()) }
 function parseMoneyInput(value){ const numeric = Number(String(value).replace(/[^0-9.]/g, '')); return Number.isNaN(numeric) ? 0 : numeric }
 function formatDocNumber(raw, type){
@@ -82,6 +83,11 @@ export default function AppNew(){
   const [savedDocId, setSavedDocId] = useState(null)
   const [saveMessage, setSaveMessage] = useState('')
   const [savedDocs, setSavedDocs] = useState([])
+  const [clientPhotos, setClientPhotos] = useState([])
+  const [photosLoading, setPhotosLoading] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [includePhotos, setIncludePhotos] = useState(false)
+  const [photoMessage, setPhotoMessage] = useState('')
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -333,6 +339,20 @@ export default function AppNew(){
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!user || !client.trim()) { setClientPhotos([]); return }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      setPhotosLoading(true)
+      try {
+        const { data } = await supabase.from('photos').select('*').eq('user_id', user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
+        if (!cancelled) setClientPhotos(data || [])
+      } catch(e){ console.error('Load photos error', e) }
+      finally { if (!cancelled) setPhotosLoading(false) }
+    }, 400)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [client, user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     async function getMaxRawCounter(){
       if (!user) return null
       try{
@@ -532,6 +552,35 @@ export default function AppNew(){
   function addAddon(desc, qty, unit){ setAddons(a=>[...a, { desc, qty, unit }]); pushHistory('addon:added') }
   function removeAddon(i){ setAddons(a=> a.filter((_,idx)=>idx!==i)); pushHistory('addon:removed') }
 
+  async function uploadPhoto(file){
+    if (!user || !client.trim()) return
+    setPhotoUploading(true)
+    setPhotoMessage('')
+    try {
+      const slug = client.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${user.id}/${slug}/${Date.now()}-${safeName}`
+      const { error: upErr } = await supabase.storage.from('job-photos').upload(path, file)
+      if (upErr) { setPhotoMessage(upErr.message); return }
+      const { error: dbErr } = await supabase.from('photos').insert([{ user_id: user.id, client_name: client.trim(), storage_path: path, file_name: file.name }])
+      if (dbErr) { setPhotoMessage(dbErr.message); return }
+      const { data } = await supabase.from('photos').select('*').eq('user_id', user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
+      setClientPhotos(data || [])
+      setPhotoMessage('Uploaded!')
+      setTimeout(() => setPhotoMessage(''), 2000)
+    } catch(e){ console.error('Upload error', e); setPhotoMessage('Upload failed') }
+    finally { setPhotoUploading(false) }
+  }
+
+  async function deletePhoto(photo){
+    if (!window.confirm('Delete this photo?')) return
+    try {
+      await supabase.storage.from('job-photos').remove([photo.storage_path])
+      await supabase.from('photos').delete().eq('id', photo.id)
+      setClientPhotos(p => p.filter(x => x.id !== photo.id))
+    } catch(e){ console.error('Delete photo error', e) }
+  }
+
   function sendEmail(){
     const subject = `${docNumber} - ${contractor}`
     const paymentLines = []
@@ -661,6 +710,7 @@ export default function AppNew(){
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
             <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
+            <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
           </div>
@@ -678,6 +728,36 @@ export default function AppNew(){
             <input value={address} onChange={e=>setAddress(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
           </div>
         </div>
+
+        <section className='no-print' style={{ marginTop:14, background:'#041827', padding:12, borderRadius:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
+            <h4 style={{ color:GOLD, margin:0 }}>Client Photos</h4>
+            {client.trim() ? (
+              <label style={{ background:GOLD, color:NAVY, padding:'5px 12px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+                {photoUploading ? 'Uploading…' : '+ Add Photos'}
+                <input type='file' multiple accept='image/*' style={{ display:'none' }} disabled={photoUploading}
+                  onChange={e => { Array.from(e.target.files).forEach(f => uploadPhoto(f)); e.target.value = '' }} />
+              </label>
+            ) : <span style={{ color:'#7f98b0', fontSize:12 }}>Enter a client name to manage photos</span>}
+            {photoMessage ? <span style={{ color:GOLD, fontSize:12 }}>{photoMessage}</span> : null}
+          </div>
+          {photosLoading ? (
+            <div style={{ color:'#9fb0c6', fontSize:13 }}>Loading…</div>
+          ) : clientPhotos.length === 0 && client.trim() ? (
+            <div style={{ color:'#7f98b0', fontSize:13 }}>No photos yet for this client.</div>
+          ) : (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+              {clientPhotos.map(photo => (
+                <div key={photo.id} style={{ position:'relative' }}>
+                  <img src={getPhotoUrl(photo.storage_path)} alt={photo.file_name || 'photo'}
+                    style={{ width:130, height:130, objectFit:'cover', borderRadius:6, border:'1px solid #1a3450', display:'block' }} />
+                  <button onClick={()=>deletePhoto(photo)}
+                    style={{ position:'absolute', top:4, right:4, background:'rgba(122,10,10,0.9)', color:'#fff', border:'none', borderRadius:4, padding:'2px 7px', cursor:'pointer', fontSize:12 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className={!showFixturesPrint ? 'no-print' : undefined} style={{ marginTop:14, background:'#041827', padding:12, borderRadius:8 }}>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
@@ -1028,6 +1108,18 @@ export default function AppNew(){
               <div>{contractor}</div>
               <div style={{ fontSize:10, opacity:0.45, marginTop:6, letterSpacing:'0.5px' }}>Generated with FieldQuote</div>
             </div>
+
+            {includePhotos && clientPhotos.length > 0 ? (
+              <div className='print-section' style={{ marginTop:24 }}>
+                <div className='print-section-title'>Work Photos</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
+                  {clientPhotos.map(photo => (
+                    <img key={photo.id} src={getPhotoUrl(photo.storage_path)} alt={photo.file_name || 'photo'}
+                      style={{ width:'100%', aspectRatio:'4/3', objectFit:'cover', borderRadius:4 }} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
