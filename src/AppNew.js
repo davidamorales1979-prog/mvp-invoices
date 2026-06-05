@@ -74,7 +74,7 @@ export default function AppNew(){
   const [serviceStartPercent, setServiceStartPercent] = useState(50)
   const [serviceCompletionPercent, setServiceCompletionPercent] = useState(50)
 
-  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
   const [addons, setAddons] = useState([])
   const [notes, setNotes] = useState('')
   const [history, setHistory] = useState([])
@@ -86,10 +86,11 @@ export default function AppNew(){
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
 
-  const isResidentialNewConstruction = projectType === 'New Construction' && fixtureType === 'Residential'
+  const isNewConstruction = projectType === 'New Construction'
   const baseServiceAmount = services.reduce((sum,s) => {
-    if (!isResidentialNewConstruction) return sum
+    if (!isNewConstruction) return sum
     if (!BASE_SERVICE_IDS.includes(s.id)) return sum
+    if ((s.billingMode ?? 'pct') !== 'pct') return sum
     return sum + ((s.enabled ? (s.qty||0) : 0) * (s.unit||0))
   }, 0)
   const base = houses * fixturesPerHouse * pricePerFixture + baseServiceAmount
@@ -123,10 +124,10 @@ export default function AppNew(){
   const printAddress = address || ''
 
   const servicesTotal = useMemo(()=> services.reduce((s,it)=> {
-    if (isResidentialNewConstruction && BASE_SERVICE_IDS.includes(it.id)) return s
+    if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return s
     return s + (it.enabled ? (it.qty||0)*(it.unit||0) : 0)
-  }, 0), [services, isResidentialNewConstruction])
-  const printServices = services.filter(s => s.enabled && s.qty>0 && !(isResidentialNewConstruction && BASE_SERVICE_IDS.includes(s.id)))
+  }, 0), [services, isNewConstruction])
+  const printServices = services.filter(s => s.enabled && s.qty>0 && !(isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct'))
   const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
   const subtotal = base + servicesTotal + addonsTotal
   const isPhaseInvoice = docType === 'invoice' && projectType === 'New Construction' && selectedPhaseNames.length > 0
@@ -518,7 +519,7 @@ export default function AppNew(){
     setIncludeTrim(true)
     setServiceStartPercent(50)
     setServiceCompletionPercent(50)
-    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
     setAddons([])
     setNotes('')
     setHistory([])
@@ -727,10 +728,18 @@ export default function AppNew(){
               <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
                 <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
                 <div style={{ flex:1 }}>
-                  {s.name}
-                  {isResidentialNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
-                    <span style={{ color:'#7f98b0', marginLeft:8, fontSize:12 }}>(included in base)</span>
-                  ) : null}
+                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <span>{s.name}</span>
+                    {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
+                      <div className='no-print' style={{ display:'flex', gap:2 }}>
+                        <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                        <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
+                      </div>
+                    ) : null}
+                    {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
+                      <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
+                    ) : null}
+                  </div>
                 </div>
                 <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
                 <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
@@ -893,7 +902,7 @@ export default function AppNew(){
                       <td>{houses} {fixtureType === 'Residential' ? 'house(s)' : 'unit(s)'} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
                       <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(houses * fixturesPerHouse * pricePerFixture)}</td>
                     </tr>
-                    {isResidentialNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0).map(s => (
+                    {isNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0 && (s.billingMode ?? 'pct') === 'pct').map(s => (
                       <tr key={s.id}>
                         <td style={{ color:'#7f98b0' }}>{s.name}</td>
                         <td colSpan={2} style={{ textAlign:'right', color:'#7f98b0' }}>{formatCurrency((s.qty||0)*s.unit)}</td>
