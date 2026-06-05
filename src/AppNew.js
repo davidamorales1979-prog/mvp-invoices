@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { supabase } from './supabase'
 
 const NAVY = '#0a1628'
 const GOLD = '#c9a84c'
@@ -62,6 +63,8 @@ export default function AppNew(){
   const [notes, setNotes] = useState('')
   const [history, setHistory] = useState([])
   const [status, setStatus] = useState('draft')
+  const [savedDocId, setSavedDocId] = useState(null)
+  const [saveMessage, setSaveMessage] = useState('')
 
   const isResidentialNewConstruction = projectType === 'New Construction' && fixtureType === 'Residential'
   const baseServiceAmount = services.reduce((sum,s) => {
@@ -113,9 +116,113 @@ export default function AppNew(){
     return { start: subtotal*0.5, completion: subtotal*0.5 }
   }, [subtotal, projectType])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    async function loadLastDocument() {
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error) {
+        console.error('Supabase load error:', error)
+        return
+      }
+      if (!data) return
+
+      if (data.raw_counter != null) counter.reset(data.raw_counter)
+      setSavedDocId(data.id ?? null)
+      setContractor(data.contractor ?? 'MVP Solutions')
+      setShowLogo(data.show_logo ?? true)
+      setDocType(data.doc_type ?? 'quote')
+      setClient(data.client ?? '')
+      setAddress(data.address ?? '')
+      setHouses(data.houses ?? 1)
+      setFixturesPerHouse(data.fixtures_per_house ?? 1)
+      setPricePerFixture(data.price_per_fixture ?? 120)
+      setFixtureType(data.fixture_type ?? 'Residential')
+      setProjectType(data.project_type ?? 'New Construction')
+      setIncludeUnderground(data.include_underground ?? true)
+      setIncludeRough(data.include_rough ?? true)
+      setIncludeTrim(data.include_trim ?? true)
+      setServiceStartPercent(data.service_start_percent ?? 50)
+      setServiceCompletionPercent(data.service_completion_percent ?? 50)
+      setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+      setAddons(data.addons ?? [])
+      setNotes(data.notes ?? '')
+      setHistory(data.history ?? [])
+      setStatus(data.status ?? 'draft')
+    }
+
+    loadLastDocument()
+  }, [])
+
+  async function persistDocument(overrides = {}){
+    const payload = {
+      contractor,
+      show_logo: showLogo,
+      doc_type: docType,
+      client,
+      address,
+      houses,
+      fixtures_per_house: fixturesPerHouse,
+      price_per_fixture: pricePerFixture,
+      fixture_type: fixtureType,
+      project_type: projectType,
+      include_underground: includeUnderground,
+      include_rough: includeRough,
+      include_trim: includeTrim,
+      service_start_percent: serviceStartPercent,
+      service_completion_percent: serviceCompletionPercent,
+      services,
+      addons,
+      notes,
+      history,
+      status,
+      doc_number: docNumber,
+      raw_counter: counter.raw,
+      ...overrides
+    }
+
+    if (savedDocId) {
+      const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId)
+      if (error) {
+        console.error('Supabase update error:', error)
+        return
+      }
+      setSaveMessage('Document saved successfully')
+      return
+    }
+
+    const { data, error } = await supabase.from('documents').insert([payload]).select('id').single()
+    if (error) {
+      console.error('Supabase insert error:', error)
+      return
+    }
+    setSavedDocId(data.id)
+    setSaveMessage('Document saved successfully')
+  }
+
+  async function saveDocument(){
+    await persistDocument()
+  }
   function pushHistory(entry){ setHistory(h=> [{ ts:new Date().toISOString(), entry, status, docNumber }, ...h]) }
-  function setDocStatus(next){ setStatus(next); pushHistory(`status:${next}`) }
-  function convertToInvoice(){ if (docType!=='invoice'){ counter.bump(); setDocType('invoice'); pushHistory('converted:quote->invoice') } }
+  function setDocStatus(next){
+    const nextHistory = [{ ts:new Date().toISOString(), entry:`status:${next}`, status: next, docNumber }, ...history]
+    setStatus(next)
+    setHistory(nextHistory)
+    persistDocument({ status: next, history: nextHistory })
+  }
+  async function convertToInvoice(){
+    if (docType !== 'invoice'){
+      counter.bump()
+      setDocType('invoice')
+      pushHistory('converted:quote->invoice')
+      await persistDocument({ doc_type: 'invoice' })
+    }
+  }
   function printDoc(){ pushHistory('printed'); window.print() }
   function newNumber(){ counter.reset(); pushHistory('reset:number') }
 
@@ -154,8 +261,10 @@ export default function AppNew(){
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
+            <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
           </div>
+          {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700 }}>{saveMessage}</div> : null}
         </div> 
 
         <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
