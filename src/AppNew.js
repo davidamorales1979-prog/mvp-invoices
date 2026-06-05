@@ -1026,6 +1026,7 @@ export default function AppNew(){
             <div className='print-footer'>
               <div>Payment due upon receipt</div>
               <div>{contractor}</div>
+              <div style={{ fontSize:10, opacity:0.45, marginTop:6, letterSpacing:'0.5px' }}>Generated with FieldQuote</div>
             </div>
           </div>
         </div>
