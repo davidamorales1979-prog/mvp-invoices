@@ -561,7 +561,7 @@ export default function AppNew(){
       const path = `${user.id}/${slug}/${Date.now()}-${safeName}`
       const { error: upErr } = await supabase.storage.from('job-photos').upload(path, file)
       if (upErr) { setPhotoMessage(upErr.message); return }
-      const { error: dbErr } = await supabase.from('photos').insert([{ user_id: user.id, client_name: client.trim(), storage_path: path, file_name: file.name }])
+      const { error: dbErr } = await supabase.from('photos').insert([{ user_id: user.id, client_name: client.trim(), file_path: path, storage_path: path, file_name: file.name }])
       if (dbErr) { setPhotoMessage(dbErr.message); return }
       const { data } = await supabase.from('photos').select('*').eq('user_id', user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
       setClientPhotos(data || [])
@@ -574,7 +574,7 @@ export default function AppNew(){
   async function deletePhoto(photo){
     if (!window.confirm('Delete this photo?')) return
     try {
-      await supabase.storage.from('job-photos').remove([photo.storage_path])
+      await supabase.storage.from('job-photos').remove([photo.file_path || photo.storage_path])
       await supabase.from('photos').delete().eq('id', photo.id)
       setClientPhotos(p => p.filter(x => x.id !== photo.id))
     } catch(e){ console.error('Delete photo error', e) }
@@ -748,7 +748,7 @@ export default function AppNew(){
             <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
               {clientPhotos.map(photo => (
                 <div key={photo.id} style={{ position:'relative' }}>
-                  <img src={getPhotoUrl(photo.storage_path)} alt={photo.file_name || 'photo'}
+                  <img src={getPhotoUrl(photo.file_path || photo.storage_path)} alt={photo.file_name || 'photo'}
                     style={{ width:130, height:130, objectFit:'cover', borderRadius:6, border:'1px solid #1a3450', display:'block' }} />
                   <button onClick={()=>deletePhoto(photo)}
                     style={{ position:'absolute', top:4, right:4, background:'rgba(122,10,10,0.9)', color:'#fff', border:'none', borderRadius:4, padding:'2px 7px', cursor:'pointer', fontSize:12 }}>✕</button>
@@ -1113,7 +1113,7 @@ export default function AppNew(){
                 <div className='print-section-title'>Work Photos</div>
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10 }}>
                   {clientPhotos.map(photo => (
-                    <img key={photo.id} src={getPhotoUrl(photo.storage_path)} alt={photo.file_name || 'photo'}
+                    <img key={photo.id} src={getPhotoUrl(photo.file_path || photo.storage_path)} alt={photo.file_name || 'photo'}
                       style={{ width:'100%', aspectRatio:'4/3', objectFit:'cover', borderRadius:4 }} />
                   ))}
                 </div>
