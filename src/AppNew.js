@@ -172,10 +172,9 @@ export default function AppNew(){
   }, [subtotal, projectType, undergroundPct, roughPct, trimPct])
 
   const _now = new Date()
-  const isSubActive = subscription && (
-    subscription.status === 'active' ||
+  // Allow access while loading or when table doesn't exist yet (subscription === null after load)
+  const isSubActive = subLoading || !subscription || subscription.status === 'active' ||
     (subscription.status === 'trialing' && subscription.trial_end && new Date(subscription.trial_end) > _now)
-  )
   const trialDaysLeft = subscription?.status === 'trialing' && subscription.trial_end
     ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
     : 0
@@ -294,6 +293,10 @@ export default function AppNew(){
   async function loadProfile(){
     if (!user) return
     setProfileLoading(true)
+    const fallback = setTimeout(() => {
+      setProfileLoading(false)
+      setProfileChecked(true)
+    }, 10000)
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -317,6 +320,7 @@ export default function AppNew(){
     } catch (e) {
       console.error('Error loading profile', e)
     } finally {
+      clearTimeout(fallback)
       setProfileLoading(false)
       setProfileChecked(true)
     }
@@ -410,6 +414,7 @@ export default function AppNew(){
 
   useEffect(() => {
     async function initAuth(){
+      const fallback = setTimeout(() => setAuthLoading(false), 10000)
       try {
         const { data, error } = await supabase.auth.getSession()
         if (error) {
@@ -419,6 +424,7 @@ export default function AppNew(){
       } catch (e) {
         console.error('Error getting auth session', e)
       } finally {
+        clearTimeout(fallback)
         setAuthLoading(false)
       }
     }
@@ -445,20 +451,29 @@ export default function AppNew(){
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!user) { setSubscription(null); return }
+    if (!user) { setSubscription(null); setSubLoading(false); return }
     let cancelled = false
     setSubLoading(true)
     ;(async () => {
-      let { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
-      if (!data) {
-        const trialEnd = new Date()
-        trialEnd.setDate(trialEnd.getDate() + 30)
-        const ins = await supabase.from('subscriptions')
-          .insert({ user_id: user.id, status: 'trialing', trial_end: trialEnd.toISOString() })
-          .select().single()
-        data = ins.data
+      try {
+        const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
+        let sub = data
+        // PGRST116 = no rows returned — create a trial record
+        // Any other error (e.g. table doesn't exist) — leave sub as null and allow access
+        if (!sub && error?.code === 'PGRST116') {
+          const trialEnd = new Date()
+          trialEnd.setDate(trialEnd.getDate() + 30)
+          const ins = await supabase.from('subscriptions')
+            .insert({ user_id: user.id, status: 'trialing', trial_end: trialEnd.toISOString() })
+            .select().single()
+          sub = ins?.data ?? null
+        }
+        if (!cancelled) setSubscription(sub)
+      } catch (e) {
+        console.error('Subscription load error:', e)
+      } finally {
+        if (!cancelled) setSubLoading(false)
       }
-      if (!cancelled) { setSubscription(data); setSubLoading(false) }
     })()
     return () => { cancelled = true }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -779,7 +794,7 @@ export default function AppNew(){
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
 
-  if (authLoading || (user && !profileChecked) || (user && profile && subLoading)) {
+  if (authLoading || (user && !profileChecked)) {
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ textAlign:'center' }}>Loading...</div>
