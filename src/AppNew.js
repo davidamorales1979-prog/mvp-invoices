@@ -31,6 +31,25 @@ const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater', 'manablok']
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
 function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
+
+function calcDocBase(doc) {
+  const svcAmt = (doc.services || []).reduce((sum, s) => {
+    if (doc.project_type !== 'New Construction') return sum
+    if (!BASE_SERVICE_IDS.includes(s.id)) return sum
+    if ((s.billingMode ?? 'pct') !== 'pct') return sum
+    return sum + (s.enabled ? (s.qty || 0) * (s.unit || 0) : 0)
+  }, 0)
+  return (doc.houses || 0) * (doc.fixtures_per_house || 0) * (doc.price_per_fixture || 0) + svcAmt
+}
+
+function isPhasePaid(doc, phaseKey) {
+  return (doc.history || []).some(h => h.entry === `phase:${phaseKey}:paid`)
+}
+function getUnitLabel(type) {
+  if (type === 'Residential') return 'Houses'
+  if (type === 'Industrial') return 'Buildings'
+  return 'Units'
+}
 function formatMoneyInput(n){ return '$' + (Number(n || 0).toString()) }
 function parseMoneyInput(value){ const numeric = Number(String(value).replace(/[^0-9.]/g, '')); return Number.isNaN(numeric) ? 0 : numeric }
 function formatDocNumber(raw, type){
@@ -64,9 +83,9 @@ export default function AppNew(){
   const [client, setClient] = useState('')
   const [address, setAddress] = useState('')
 
-  const [houses, setHouses] = useState(1)
-  const [fixturesPerHouse, setFixturesPerHouse] = useState(1)
-  const [pricePerFixture, setPricePerFixture] = useState(120)
+  const [houses, setHouses] = useState(0)
+  const [fixturesPerHouse, setFixturesPerHouse] = useState(0)
+  const [pricePerFixture, setPricePerFixture] = useState(0)
   const [fixtureType, setFixtureType] = useState('Residential')
   const [projectType, setProjectType] = useState('New Construction')
   const [includeUnderground, setIncludeUnderground] = useState(true)
@@ -74,8 +93,11 @@ export default function AppNew(){
   const [includeTrim, setIncludeTrim] = useState(true)
   const [serviceStartPercent, setServiceStartPercent] = useState(50)
   const [serviceCompletionPercent, setServiceCompletionPercent] = useState(50)
+  const [undergroundPct, setUndergroundPct] = useState(30)
+  const [roughPct, setRoughPct] = useState(50)
+  const [trimPct, setTrimPct] = useState(20)
 
-  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
+  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
   const [addons, setAddons] = useState([])
   const [notes, setNotes] = useState('')
   const [history, setHistory] = useState([])
@@ -88,6 +110,15 @@ export default function AppNew(){
   const [photoUploading, setPhotoUploading] = useState(false)
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [showSchedule, setShowSchedule] = useState(false)
+  const [allScheduledDocs, setAllScheduledDocs] = useState([])
+  const [showClients, setShowClients] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const [subscription, setSubscription] = useState(null)
+  const [subLoading, setSubLoading] = useState(false)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -101,30 +132,26 @@ export default function AppNew(){
   const base = houses * fixturesPerHouse * pricePerFixture + baseServiceAmount
   const phases = useMemo(() => {
     if (projectType === 'New Construction') {
-      return { underground: base*0.3, rough: base*0.5, trim: base*0.2 }
+      return { underground: base*(undergroundPct/100), rough: base*(roughPct/100), trim: base*(trimPct/100) }
     }
     return {
       start: base * (serviceStartPercent / 100),
       completion: base * (serviceCompletionPercent / 100)
     }
-  }, [base, projectType, serviceStartPercent, serviceCompletionPercent])
+  }, [base, projectType, serviceStartPercent, serviceCompletionPercent, undergroundPct, roughPct, trimPct])
+  const phasePctSum = undergroundPct + roughPct + trimPct
   const showFixturesPrint = base > 0
   const showNewConstructionSchedule = projectType === 'New Construction' && (includeUnderground || includeRough || includeTrim)
   const selectedPhaseNames = []
-  if (includeUnderground) selectedPhaseNames.push('30% Underground')
-  if (includeRough) selectedPhaseNames.push('50% Rough-In')
-  if (includeTrim) selectedPhaseNames.push('20% Trim')
+  if (includeUnderground) selectedPhaseNames.push(`${undergroundPct}% Underground`)
+  if (includeRough) selectedPhaseNames.push(`${roughPct}% Rough-In`)
+  if (includeTrim) selectedPhaseNames.push(`${trimPct}% Trim`)
   const selectedPhaseLabel = selectedPhaseNames.length === 0 ? '' : selectedPhaseNames.length === 1 ? selectedPhaseNames[0] : selectedPhaseNames.length === 2 ? `${selectedPhaseNames[0]} and ${selectedPhaseNames[1]}` : selectedPhaseNames.join(', ')
-  const selectedPhaseAmount = selectedPhaseNames.reduce((sum,name) => {
-    if (name === '30% Underground') return sum + phases.underground
-    if (name === '50% Rough-In') return sum + phases.rough
-    if (name === '20% Trim') return sum + phases.trim
-    return sum
-  }, 0)
+  const selectedPhaseAmount = (includeUnderground ? phases.underground : 0) + (includeRough ? phases.rough : 0) + (includeTrim ? phases.trim : 0)
   const paymentScheduleList = []
-  if (includeUnderground) paymentScheduleList.push({ name: '30% Underground', pct: 30, amount: phases.underground })
-  if (includeRough) paymentScheduleList.push({ name: '50% Rough-In', pct: 50, amount: phases.rough })
-  if (includeTrim) paymentScheduleList.push({ name: '20% Trim', pct: 20, amount: phases.trim })
+  if (includeUnderground) paymentScheduleList.push({ name: `${undergroundPct}% Underground`, pct: undergroundPct, amount: phases.underground })
+  if (includeRough) paymentScheduleList.push({ name: `${roughPct}% Rough-In`, pct: roughPct, amount: phases.rough })
+  if (includeTrim) paymentScheduleList.push({ name: `${trimPct}% Trim`, pct: trimPct, amount: phases.trim })
   const showPrintNote = projectType === 'New Construction' && selectedPhaseNames.length > 0 && (docType === 'quote' || selectedPhaseNames.length < 3)
   const printAddress = address || ''
 
@@ -139,10 +166,19 @@ export default function AppNew(){
   const displayTotal = isPhaseInvoice ? selectedPhaseAmount + servicesTotal : subtotal
   const schedule = useMemo(() => {
     if (projectType === 'New Construction') {
-      return { underground: subtotal*0.3, rough: subtotal*0.5, trim: subtotal*0.2 }
+      return { underground: subtotal*(undergroundPct/100), rough: subtotal*(roughPct/100), trim: subtotal*(trimPct/100) }
     }
     return { start: subtotal*0.5, completion: subtotal*0.5 }
-  }, [subtotal, projectType])
+  }, [subtotal, projectType, undergroundPct, roughPct, trimPct])
+
+  const _now = new Date()
+  const isSubActive = subscription && (
+    subscription.status === 'active' ||
+    (subscription.status === 'trialing' && subscription.trial_end && new Date(subscription.trial_end) > _now)
+  )
+  const trialDaysLeft = subscription?.status === 'trialing' && subscription.trial_end
+    ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
+    : 0
 
   const fetchSavedDocs = useCallback(async () => {
     if (!user) return
@@ -158,6 +194,72 @@ export default function AppNew(){
     }
     setSavedDocs(data || [])
   }, [user])
+
+  const fetchScheduledDocs = useCallback(async () => {
+    if (!user) return
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
+      .eq('user_id', user.id)
+      .not('scheduled_date', 'is', null)
+      .order('scheduled_date', { ascending: true })
+    if (error) { console.error('Supabase fetch scheduled docs error:', error); return }
+    setAllScheduledDocs(data || [])
+  }, [user])
+
+  const paymentAlerts = useMemo(() => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const alerts = []
+    savedDocs.forEach(doc => {
+      if (!doc.scheduled_date) return
+      const sched = new Date(doc.scheduled_date + 'T00:00:00')
+      const daysUntil = Math.round((sched - today) / 86400000)
+      if (doc.project_type === 'New Construction' || !doc.project_type) {
+        const base = calcDocBase(doc)
+        ;[
+          { key:'underground', label:`${doc.underground_pct ?? 30}% Underground`, amount: base * ((doc.underground_pct ?? 30)/100), included: doc.include_underground !== false },
+          { key:'rough',       label:`${doc.rough_pct ?? 50}% Rough-In`,    amount: base * ((doc.rough_pct ?? 50)/100), included: doc.include_rough !== false },
+          { key:'trim',        label:`${doc.trim_pct ?? 20}% Trim`,         amount: base * ((doc.trim_pct ?? 20)/100), included: doc.include_trim !== false },
+        ].forEach(p => {
+          if (!p.included || isPhasePaid(doc, p.key)) return
+          alerts.push({ doc, phaseKey: p.key, phaseLabel: p.label, amount: p.amount, daysUntil })
+        })
+      } else {
+        const base = calcDocBase(doc)
+        const startPct  = doc.service_start_percent  ?? 50
+        const endPct    = doc.service_completion_percent ?? 50
+        ;[
+          { key:'start',      label:`${startPct}% Start`,       amount: base * startPct / 100 },
+          { key:'completion', label:`${endPct}% Completion`,    amount: base * endPct / 100 },
+        ].forEach(p => {
+          if (isPhasePaid(doc, p.key)) return
+          alerts.push({ doc, phaseKey: p.key, phaseLabel: p.label, amount: p.amount, daysUntil })
+        })
+      }
+    })
+    return alerts.sort((a, b) => a.daysUntil - b.daysUntil)
+  }, [savedDocs])
+
+  const markPhasePaid = useCallback(async (doc, phaseKey) => {
+    const entry = { ts: new Date().toISOString(), entry: `phase:${phaseKey}:paid`, status: doc.status, docNumber: doc.doc_number }
+    const newHistory = [entry, ...(doc.history || [])]
+    const { error } = await supabase.from('documents').update({ history: newHistory }).eq('id', doc.id).eq('user_id', user?.id)
+    if (!error) fetchSavedDocs()
+  }, [user, fetchSavedDocs])
+
+  async function startCheckout(){
+    setCheckoutLoading(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { origin: window.location.origin }
+      })
+      if (error || !data?.url) throw new Error(error?.message || 'No checkout URL returned')
+      window.location.href = data.url
+    } catch (e) {
+      alert('Could not start checkout: ' + e.message)
+      setCheckoutLoading(false)
+    }
+  }
 
   async function signUp(){
     setAuthMessage('')
@@ -185,6 +287,7 @@ export default function AppNew(){
     setUser(null)
     setProfile(null)
     setProfileChecked(false)
+    setSubscription(null)
     setAuthMessage('Logged out')
   }
 
@@ -262,9 +365,9 @@ export default function AppNew(){
     setDocType(data.doc_type ?? 'quote')
     setClient(data.client ?? '')
     setAddress(data.address ?? '')
-    setHouses(data.houses ?? 1)
-    setFixturesPerHouse(data.fixtures_per_house ?? 1)
-    setPricePerFixture(data.price_per_fixture ?? 120)
+    setHouses(data.houses ?? 0)
+    setFixturesPerHouse(data.fixtures_per_house ?? 0)
+    setPricePerFixture(data.price_per_fixture ?? 0)
     setFixtureType(data.fixture_type ?? 'Residential')
     setProjectType(data.project_type ?? 'New Construction')
     setIncludeUnderground(data.include_underground ?? true)
@@ -272,11 +375,15 @@ export default function AppNew(){
     setIncludeTrim(data.include_trim ?? true)
     setServiceStartPercent(data.service_start_percent ?? 50)
     setServiceCompletionPercent(data.service_completion_percent ?? 50)
-    setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+    setUndergroundPct(data.underground_pct ?? 30)
+    setRoughPct(data.rough_pct ?? 50)
+    setTrimPct(data.trim_pct ?? 20)
+    setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0 })))
     setAddons(data.addons ?? [])
     setNotes(data.notes ?? '')
     setHistory(data.history ?? [])
     setStatus(data.status ?? 'draft')
+    setScheduleDate(data.scheduled_date ?? '')
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
@@ -336,6 +443,46 @@ export default function AppNew(){
       setProfileChecked(false)
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user) { setSubscription(null); return }
+    let cancelled = false
+    setSubLoading(true)
+    ;(async () => {
+      let { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
+      if (!data) {
+        const trialEnd = new Date()
+        trialEnd.setDate(trialEnd.getDate() + 30)
+        const ins = await supabase.from('subscriptions')
+          .insert({ user_id: user.id, status: 'trialing', trial_end: trialEnd.toISOString() })
+          .select().single()
+        data = ins.data
+      }
+      if (!cancelled) { setSubscription(data); setSubLoading(false) }
+    })()
+    return () => { cancelled = true }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('checkout') !== 'success') return
+    window.history.replaceState({}, '', window.location.pathname)
+    let attempts = 0
+    const poll = async () => {
+      const { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
+      if (data?.status === 'active') {
+        setSubscription(data)
+      } else if (attempts++ < 8) {
+        setTimeout(poll, 2000)
+      }
+    }
+    setTimeout(poll, 2000)
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (showSchedule) fetchScheduledDocs()
+  }, [showSchedule, fetchScheduledDocs])
 
   useEffect(() => {
     if (!user || !client.trim()) { setClientPhotos([]); return }
@@ -398,9 +545,9 @@ export default function AppNew(){
       setDocType(data.doc_type ?? 'quote')
       setClient(data.client ?? '')
       setAddress(data.address ?? '')
-      setHouses(data.houses ?? 1)
-      setFixturesPerHouse(data.fixtures_per_house ?? 1)
-      setPricePerFixture(data.price_per_fixture ?? 120)
+      setHouses(data.houses ?? 0)
+      setFixturesPerHouse(data.fixtures_per_house ?? 0)
+      setPricePerFixture(data.price_per_fixture ?? 0)
       setFixtureType(data.fixture_type ?? 'Residential')
       setProjectType(data.project_type ?? 'New Construction')
       setIncludeUnderground(data.include_underground ?? true)
@@ -408,11 +555,15 @@ export default function AppNew(){
       setIncludeTrim(data.include_trim ?? true)
       setServiceStartPercent(data.service_start_percent ?? 50)
       setServiceCompletionPercent(data.service_completion_percent ?? 50)
+      setUndergroundPct(data.underground_pct ?? 30)
+      setRoughPct(data.rough_pct ?? 50)
+      setTrimPct(data.trim_pct ?? 20)
       setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
       setAddons(data.addons ?? [])
       setNotes(data.notes ?? '')
       setHistory(data.history ?? [])
       setStatus(data.status ?? 'draft')
+      setScheduleDate(data.scheduled_date ?? '')
     }
 
     async function init() {
@@ -426,6 +577,8 @@ export default function AppNew(){
   }, [reset, fetchSavedDocs, user])
 
   async function persistDocument(overrides = {}){
+    if (!user?.id) { setSaveMessage('Not logged in'); return false }
+
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -442,36 +595,48 @@ export default function AppNew(){
       include_trim: includeTrim,
       service_start_percent: serviceStartPercent,
       service_completion_percent: serviceCompletionPercent,
+      underground_pct: undergroundPct,
+      rough_pct: roughPct,
+      trim_pct: trimPct,
       services,
       addons,
       notes,
       history,
       status,
       total: displayTotal,
-      user_id: user?.id,
+      user_id: user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
+      scheduled_date: scheduleDate || null,
       ...overrides
     }
 
-    if (savedDocId) {
-      const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', user?.id)
+    try {
+      if (savedDocId) {
+        const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', user.id)
+        if (error) {
+          console.error('Supabase update error:', error)
+          setSaveMessage(`Save failed: ${error.message}`)
+          return false
+        }
+        setSaveMessage('Document saved successfully')
+        return true
+      }
+
+      const { data, error } = await supabase.from('documents').insert([payload]).select('id').single()
       if (error) {
-        console.error('Supabase update error:', error)
+        console.error('Supabase insert error:', error)
+        setSaveMessage(`Save failed: ${error.message}`)
         return false
       }
+      setSavedDocId(data.id)
       setSaveMessage('Document saved successfully')
       return true
-    }
-
-    const { data, error } = await supabase.from('documents').insert([payload]).select('id').single()
-    if (error) {
-      console.error('Supabase insert error:', error)
+    } catch (e) {
+      console.error('persistDocument exception:', e)
+      setSaveMessage(`Save failed: ${e.message}`)
       return false
     }
-    setSavedDocId(data.id)
-    setSaveMessage('Document saved successfully')
-    return true
   }
 
   async function saveDocument(){
@@ -538,11 +703,15 @@ export default function AppNew(){
     setIncludeTrim(true)
     setServiceStartPercent(50)
     setServiceCompletionPercent(50)
-    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
+    setUndergroundPct(30)
+    setRoughPct(50)
+    setTrimPct(20)
+    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
     setAddons([])
     setNotes('')
     setHistory([])
     setStatus('draft')
+    setScheduleDate('')
     pushHistory('reset:number')
   }
 
@@ -584,9 +753,9 @@ export default function AppNew(){
     const subject = `${docNumber} - ${contractor}`
     const paymentLines = []
     if (projectType === 'New Construction') {
-      if (includeUnderground) paymentLines.push(`  - 30% Underground: ${formatCurrency(schedule.underground)}`)
-      if (includeRough) paymentLines.push(`  - 50% Rough-In: ${formatCurrency(schedule.rough)}`)
-      if (includeTrim) paymentLines.push(`  - 20% Trim: ${formatCurrency(schedule.trim)}`)
+      if (includeUnderground) paymentLines.push(`  - ${undergroundPct}% Underground: ${formatCurrency(schedule.underground)}`)
+      if (includeRough) paymentLines.push(`  - ${roughPct}% Rough-In: ${formatCurrency(schedule.rough)}`)
+      if (includeTrim) paymentLines.push(`  - ${trimPct}% Trim: ${formatCurrency(schedule.trim)}`)
     } else {
       paymentLines.push(`  - ${serviceStartPercent}% Start: ${formatCurrency(schedule.start)}`)
       paymentLines.push(`  - ${serviceCompletionPercent}% Completion: ${formatCurrency(schedule.completion)}`)
@@ -610,7 +779,7 @@ export default function AppNew(){
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
 
-  if (authLoading || (user && !profileChecked)) {
+  if (authLoading || (user && !profileChecked) || (user && profile && subLoading)) {
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ textAlign:'center' }}>Loading...</div>
@@ -622,7 +791,10 @@ export default function AppNew(){
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ width:360, padding:24, background:'#071827', borderRadius:12, boxShadow:'0 10px 40px rgba(0,0,0,0.4)' }}>
-          <h2 style={{ color:GOLD, marginBottom:12 }}>Login or Sign Up</h2>
+          <div style={{ textAlign:'center', marginBottom:20 }}>
+            <img src='/logo.svg' alt='FieldQuote' style={{ height:90, width:'auto' }} />
+          </div>
+          <h2 style={{ color:GOLD, marginBottom:12, textAlign:'center' }}>Login or Sign Up</h2>
           <div style={{ marginBottom:12 }}>
             <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Email</label>
             <input type='email' value={email} onChange={e=>setEmail(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
@@ -677,23 +849,57 @@ export default function AppNew(){
     )
   }
 
+  if (!isSubActive) {
+    const isExpired = subscription?.status === 'trialing' && trialDaysLeft === 0
+    const isPastDue = subscription?.status === 'past_due'
+    const isCanceled = subscription?.status === 'canceled'
+    return (
+      <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ width:400, padding:32, background:'#071827', borderRadius:14, boxShadow:'0 10px 40px rgba(0,0,0,0.5)', textAlign:'center' }}>
+          <img src='/logo.svg' alt='FieldQuote' style={{ height:80, width:'auto', marginBottom:24 }} />
+          {isPastDue ? (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:8 }}>Payment Failed</h2>
+              <p style={{ color:'#9fb0c6', marginBottom:20, lineHeight:1.5 }}>We couldn't process your last payment. Please update your billing info to continue using FieldQuote.</p>
+            </>
+          ) : isCanceled ? (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:8 }}>Subscription Canceled</h2>
+              <p style={{ color:'#9fb0c6', marginBottom:20, lineHeight:1.5 }}>Your subscription has been canceled. Resubscribe to continue using FieldQuote.</p>
+            </>
+          ) : isExpired ? (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:8 }}>Free Trial Ended</h2>
+              <p style={{ color:'#9fb0c6', marginBottom:20, lineHeight:1.5 }}>Your 30-day free trial has ended. Subscribe to keep creating quotes and invoices.</p>
+            </>
+          ) : (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:8 }}>Subscribe to FieldQuote</h2>
+              <p style={{ color:'#9fb0c6', marginBottom:20, lineHeight:1.5 }}>Start your 30-day free trial. No charge until your trial ends.</p>
+            </>
+          )}
+          <div style={{ background:'#0a1e32', borderRadius:10, padding:'16px 20px', marginBottom:24 }}>
+            <div style={{ fontSize:36, fontWeight:700, color:GOLD }}>$29<span style={{ fontSize:16, color:'#9fb0c6', fontWeight:400 }}>/month</span></div>
+            <div style={{ color:'#7f98b0', fontSize:13, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
+          </div>
+          <button
+            onClick={startCheckout}
+            disabled={checkoutLoading}
+            style={{ width:'100%', padding:'13px 0', borderRadius:8, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:16, cursor:'pointer', marginBottom:12 }}
+          >
+            {checkoutLoading ? 'Redirecting to Stripe…' : isPastDue || isCanceled ? 'Resubscribe — $29/month' : 'Start Free Trial'}
+          </button>
+          <button onClick={signOut} style={{ background:'transparent', border:'none', color:'#7f98b0', cursor:'pointer', fontSize:13 }}>Sign out ({user.email})</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
         <div className='invoice-header screen-only' style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-            {contractor === 'MVP Solutions' && showLogo ? (
-              <div style={{ width:56, height:56, background:GOLD, borderRadius:6 }} />
-            ) : contractor === 'MVP Solutions' ? (
-              <div style={{ color:'#7f98b0' }}>Logo hidden</div>
-            ) : null}
-
-            {contractor === 'MVP Solutions' ? (
-              <div><div style={{ color:GOLD, fontWeight:700 }}>MVP Solutions</div><div style={{ color:'#9fb0c6' }}>{contractor}</div></div>
-            ) : (
-              <div style={{ color:GOLD, fontWeight:700 }}>{contractor}</div>
-            )}
-          </div>
+          <img src='/logo.svg' alt='FieldQuote' style={{ height:64, width:'auto' }} />
           <div style={{ textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>{docType.toUpperCase()}</div><div style={{ color:GOLD, fontWeight:700 }}>{docNumber}</div></div>
         </div>
 
@@ -703,21 +909,61 @@ export default function AppNew(){
             <button key={name} onClick={()=>setContractor(name)} style={{ padding:8, borderRadius:6, background: contractor===name ? GOLD : '#0f2740', color: contractor===name ? NAVY : '#fff' }}>{name}</button>
           ))}
           <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
-            <label style={{ color:'#9fb0c6' }}><input type='checkbox' checked={showLogo} onChange={e=>setShowLogo(e.target.checked)} /> Show logo</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
             <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
+            <button onClick={()=>setShowDashboard(s=>!s)} style={{ background:showDashboard ? GOLD : '#0f2740', color:showDashboard ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Dashboard</button>
+            <button onClick={()=>setShowSchedule(s=>!s)} style={{ background:showSchedule ? GOLD : '#0f2740', color:showSchedule ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Schedule</button>
+            <button onClick={()=>setShowClients(s=>!s)} style={{ background:showClients ? GOLD : '#0f2740', color:showClients ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Clients</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
             <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
+            <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
           </div>
           <div style={{ marginLeft:'auto', color:'#9fb0c6' }}>{user?.email}</div>
           {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700 }}>{saveMessage}</div> : null}
-        </div> 
+        </div>
 
-        <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+        {(() => {
+          const overdue  = paymentAlerts.filter(a => a.daysUntil < 0).length
+          const dueToday = paymentAlerts.filter(a => a.daysUntil === 0).length
+          const dueSoon  = paymentAlerts.filter(a => a.daysUntil > 0 && a.daysUntil <= 7).length
+          const urgent   = overdue + dueToday + dueSoon
+          if (!urgent) return null
+          const parts = []
+          if (overdue)  parts.push(`${overdue} overdue`)
+          if (dueToday) parts.push(`${dueToday} due today`)
+          if (dueSoon)  parts.push(`${dueSoon} due this week`)
+          return (
+            <div className='no-print' style={{ margin:'10px 0 0', padding:'10px 16px', background:'#1c0e00', border:'1px solid #e8a020', borderRadius:8, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:20, lineHeight:1 }}>⚠</span>
+                <div>
+                  <span style={{ color:'#e8a020', fontWeight:700 }}>{parts.join(' · ')}</span>
+                  <span style={{ color:'#9fb0c6', marginLeft:8, fontSize:13 }}>payment phase{urgent !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              <button onClick={()=>setShowDashboard(true)} style={{ background:'#e8a020', color:NAVY, border:'none', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:12, whiteSpace:'nowrap' }}>View</button>
+            </div>
+          )
+        })()}
+
+        {subscription?.status === 'trialing' && trialDaysLeft <= 14 && (
+          <div className='no-print' style={{ margin:'10px 0 0', padding:'10px 16px', background:'#1a0e00', border:`1px solid ${GOLD}`, borderRadius:8, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+            <div style={{ color:'#d4aa5a', fontSize:13 }}>
+              {trialDaysLeft === 0
+                ? 'Your free trial has expired.'
+                : `Free trial — ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''} remaining.`}
+            </div>
+            <button onClick={startCheckout} disabled={checkoutLoading} style={{ background:GOLD, color:NAVY, border:'none', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:12, whiteSpace:'nowrap' }}>
+              {checkoutLoading ? '…' : 'Subscribe $29/mo'}
+            </button>
+          </div>
+        )}
+
+        <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
           <div>
             <label style={{ color:'#9fb0c6' }}>Client</label>
             <input value={client} onChange={e=>setClient(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
@@ -725,6 +971,10 @@ export default function AppNew(){
           <div>
             <label style={{ color:'#9fb0c6' }}>Address</label>
             <input value={address} onChange={e=>setAddress(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
+          </div>
+          <div className='no-print'>
+            <label style={{ color:'#9fb0c6' }}>Schedule Date</label>
+            <input type='date' value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
         </div>
 
@@ -760,26 +1010,43 @@ export default function AppNew(){
 
         <section className={!showFixturesPrint ? 'no-print' : undefined} style={{ marginTop:14, background:'#041827', padding:12, borderRadius:8 }}>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-            <div><label style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Houses' : 'Units'}</label><input type='number' value={houses} onChange={e=>setHouses(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
-            <div><label style={{ color:'#9fb0c6' }}>Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Commercial</option></select></div>
+            <div><label style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</label><input type='number' value={houses} onChange={e=>setHouses(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
+            <div><label style={{ color:'#9fb0c6' }}>Property Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Multi-family</option><option>Commercial</option><option>Industrial</option></select></div>
             <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option></select></div>
-            <div><label style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Fixtures / House' : 'Fixtures / Unit'}</label><input type='number' value={fixturesPerHouse} onChange={e=>setFixturesPerHouse(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
+            <div><label style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</label><input type='number' value={fixturesPerHouse} onChange={e=>setFixturesPerHouse(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
             <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
             <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
           </div>
           <div style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
             {projectType === 'New Construction' ? (
               <>
+                {phasePctSum !== 100 && (
+                  <div className='no-print' style={{ width:'100%', padding:'6px 10px', background:'#3a2000', border:'1px solid #c9a84c', borderRadius:6, color:'#f5c94a', fontSize:13, marginBottom:4 }}>
+                    Warning: phase percentages add up to {phasePctSum}% (should be 100%)
+                  </div>
+                )}
                 <div className={!includeUnderground ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeUnderground} onChange={e=>setIncludeUnderground(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>30% Underground</span></label>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <input type='checkbox' checked={includeUnderground} onChange={e=>setIncludeUnderground(e.target.checked)} />
+                    <input className='no-print' type='number' value={undergroundPct} onChange={e=>setUndergroundPct(Number(e.target.value)||0)} style={{ width:52, padding:'3px 5px', borderRadius:4, fontSize:13 }} />
+                    <span style={{ color:'#9fb0c6' }}>% Underground</span>
+                  </label>
                   <div><strong style={{ color:GOLD }}>{formatCurrency(phases.underground)}</strong></div>
                 </div>
                 <div className={!includeRough ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeRough} onChange={e=>setIncludeRough(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>50% Rough-In</span></label>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <input type='checkbox' checked={includeRough} onChange={e=>setIncludeRough(e.target.checked)} />
+                    <input className='no-print' type='number' value={roughPct} onChange={e=>setRoughPct(Number(e.target.value)||0)} style={{ width:52, padding:'3px 5px', borderRadius:4, fontSize:13 }} />
+                    <span style={{ color:'#9fb0c6' }}>% Rough-In</span>
+                  </label>
                   <div><strong style={{ color:GOLD }}>{formatCurrency(phases.rough)}</strong></div>
                 </div>
                 <div className={!includeTrim ? 'no-print' : undefined} style={{ padding:8, background:'#022026', borderRadius:6, flex:1, minWidth:200 }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}><input type='checkbox' checked={includeTrim} onChange={e=>setIncludeTrim(e.target.checked)} /> <span style={{ color:'#9fb0c6' }}>20% Trim</span></label>
+                  <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <input type='checkbox' checked={includeTrim} onChange={e=>setIncludeTrim(e.target.checked)} />
+                    <input className='no-print' type='number' value={trimPct} onChange={e=>setTrimPct(Number(e.target.value)||0)} style={{ width:52, padding:'3px 5px', borderRadius:4, fontSize:13 }} />
+                    <span style={{ color:'#9fb0c6' }}>% Trim</span>
+                  </label>
                   <div><strong style={{ color:GOLD }}>{formatCurrency(phases.trim)}</strong></div>
                 </div>
               </>
@@ -860,8 +1127,8 @@ export default function AppNew(){
 
           <div style={{ background:'#041827', padding:12, borderRadius:8 }}>
             <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD }}>{formatCurrency(base)}</div></div>
-            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Houses' : 'Units'}</div><div style={{ color:'#9fb0c6' }}>{houses}</div></div>
-            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{fixtureType === 'Residential' ? 'Fixtures / House' : 'Fixtures / Unit'}</div><div style={{ color:'#9fb0c6' }}>{fixturesPerHouse}</div></div>
+            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</div><div style={{ color:'#9fb0c6' }}>{houses}</div></div>
+            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</div><div style={{ color:'#9fb0c6' }}>{fixturesPerHouse}</div></div>
             <div className={servicesTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Services</div><div style={{ color:GOLD }}>{formatCurrency(servicesTotal)}</div></div>
             <div className={addonsTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Add-ons</div><div style={{ color:GOLD }}>{formatCurrency(addonsTotal)}</div></div>
             <hr style={{ borderColor:'rgba(255,255,255,0.04)', margin:'8px 0' }} />
@@ -871,9 +1138,9 @@ export default function AppNew(){
               <div style={{ color:'#9fb0c6', marginBottom:6 }}>Payment Schedule</div>
               {projectType === 'New Construction' ? (
                 <>
-                  {includeUnderground ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>30% (Underground)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.underground)}</div></div> : null}
-                  {includeRough ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>50% (Rough-In)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.rough)}</div></div> : null}
-                  {includeTrim ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>20% (Trim)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.trim)}</div></div> : null}
+                  {includeUnderground ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{undergroundPct}% (Underground)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.underground)}</div></div> : null}
+                  {includeRough ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{roughPct}% (Rough-In)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.rough)}</div></div> : null}
+                  {includeTrim ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{trimPct}% (Trim)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.trim)}</div></div> : null}
                 </>
               ) : (
                 <>
@@ -946,6 +1213,30 @@ export default function AppNew(){
           </div>
         </section>
 
+        {showDashboard ? (
+          <div className='no-print'>
+            <DashboardPanel docs={savedDocs} alerts={paymentAlerts} onMarkPaid={markPhasePaid} onClose={()=>setShowDashboard(false)} />
+          </div>
+        ) : null}
+
+        {showSchedule ? (
+          <div className='no-print'>
+            <ScheduleCalendar docs={allScheduledDocs} onClose={()=>setShowSchedule(false)} />
+          </div>
+        ) : null}
+
+        {showClients ? (
+          <div className='no-print'>
+            <ClientsPanel docs={savedDocs} onOpen={doc=>{ openDocument(doc); setShowClients(false) }} onClose={()=>setShowClients(false)} />
+          </div>
+        ) : null}
+
+        {showHelp ? (
+          <div className='no-print'>
+            <HelpPanel onClose={()=>setShowHelp(false)} />
+          </div>
+        ) : null}
+
         <footer className='no-print' style={{ marginTop:16, borderTop:`1px solid ${GOLD}`, paddingTop:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ color:'#9fb0c6' }}>Payment due upon receipt</div>
           <div style={{ display:'flex', gap:8 }}>
@@ -957,7 +1248,13 @@ export default function AppNew(){
 
         <div className='print-only'>
           <div className='print-document'>
-            <div style={{backgroundColor:'#0a1628',padding:'32px 40px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0'}}><div style={{color:'#c9a84c',fontSize:'32px',fontWeight:'900',letterSpacing:'2px'}}>{contractor}</div><div style={{textAlign:'right'}}><div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',letterSpacing:'3px'}}>{docType==='quote'?'QUOTE':'INVOICE'}</div><div style={{color:'white',fontSize:'28px',fontWeight:'bold'}}>{docNumber}</div></div></div>
+            <div style={{backgroundColor:'#0a1628',padding:'24px 40px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                <img src='/logo.svg' alt='FieldQuote' style={{height:56,width:'auto'}} />
+                <div style={{color:'#c9a84c',fontSize:'15px',fontWeight:'700',letterSpacing:'1.5px'}}>{contractor}</div>
+              </div>
+              <div style={{textAlign:'right'}}><div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',letterSpacing:'3px'}}>{docType==='quote'?'QUOTE':'INVOICE'}</div><div style={{color:'white',fontSize:'28px',fontWeight:'bold'}}>{docNumber}</div></div>
+            </div>
             <div className='print-header-divider' />
 
             <div className='print-client'>
@@ -978,7 +1275,7 @@ export default function AppNew(){
                   </thead>
                   <tbody>
                     <tr>
-                      <td>{houses} {fixtureType === 'Residential' ? 'house(s)' : 'unit(s)'} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
+                      <td>{houses} {getUnitLabel(fixtureType).toLowerCase().replace(/s$/, '(s)')} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
                       <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(houses * fixturesPerHouse * pricePerFixture)}</td>
                     </tr>
                     {isNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0 && (s.billingMode ?? 'pct') === 'pct').map(s => (
@@ -1004,19 +1301,19 @@ export default function AppNew(){
                     <tbody>
                       {includeUnderground ? (
                         <tr>
-                          <td>30% Underground</td>
+                          <td>{undergroundPct}% Underground</td>
                           <td>{formatCurrency(phases.underground)}</td>
                         </tr>
                       ) : null}
                       {includeRough ? (
                         <tr>
-                          <td>50% Rough-In</td>
+                          <td>{roughPct}% Rough-In</td>
                           <td>{formatCurrency(phases.rough)}</td>
                         </tr>
                       ) : null}
                       {includeTrim ? (
                         <tr>
-                          <td>20% Trim</td>
+                          <td>{trimPct}% Trim</td>
                           <td>{formatCurrency(phases.trim)}</td>
                         </tr>
                       ) : null}
@@ -1123,6 +1420,495 @@ export default function AppNew(){
         </div>
 
       </div>
+    </div>
+  )
+}
+
+function DashboardPanel({ docs, alerts, onMarkPaid, onClose }) {
+  const now = new Date()
+  const yr = now.getFullYear()
+  const mo = now.getMonth()
+
+  const isThisMonth = d => { const x = new Date(d); return x.getFullYear() === yr && x.getMonth() === mo }
+
+  const thisMonth = docs.filter(d => d.created_at && isThisMonth(d.created_at))
+  const quotesThisMonth   = thisMonth.filter(d => d.doc_type !== 'invoice').length
+  const invoicesThisMonth = thisMonth.filter(d => d.doc_type === 'invoice').length
+  const billedThisMonth   = thisMonth.reduce((s, d) => s + (Number(d.total) || 0), 0)
+  const paidThisMonth     = thisMonth.filter(d => d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
+  const totalPending      = docs.filter(d => d.status !== 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
+
+  // Build last-6-months buckets
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(yr, mo - (5 - i), 1)
+    return { label: d.toLocaleString('default', { month: 'short' }), yr: d.getFullYear(), mo: d.getMonth(), billed: 0, paid: 0 }
+  })
+  docs.forEach(doc => {
+    if (!doc.created_at) return
+    const d = new Date(doc.created_at)
+    const bucket = months.find(m => m.yr === d.getFullYear() && m.mo === d.getMonth())
+    if (!bucket) return
+    bucket.billed += Number(doc.total) || 0
+    if (doc.status === 'paid') bucket.paid += Number(doc.total) || 0
+  })
+  const maxVal = Math.max(...months.map(m => m.billed), 1)
+  const BAR_H = 110
+
+  const statCards = [
+    { label: 'Quotes This Month',   value: quotesThisMonth,   isCount: true,  accent: GOLD },
+    { label: 'Invoices This Month', value: invoicesThisMonth, isCount: true,  accent: GOLD },
+    { label: 'Billed This Month',   value: billedThisMonth,   isCount: false, accent: GOLD },
+    { label: 'Paid This Month',     value: paidThisMonth,     isCount: false, accent: '#4caf50' },
+    { label: 'Total Pending',       value: totalPending,      isCount: false, accent: '#e8a020' },
+  ]
+
+  return (
+    <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <h4 style={{ color:GOLD, margin:0 }}>Dashboard</h4>
+        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:10, marginBottom:20 }}>
+        {statCards.map(card => (
+          <div key={card.label} style={{ background:'#071827', borderRadius:8, padding:'14px 16px', borderTop:`3px solid ${card.accent}` }}>
+            <div style={{ color:'#7f98b0', fontSize:11, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.5px', lineHeight:1.3 }}>{card.label}</div>
+            <div style={{ color:card.accent, fontWeight:700, fontSize:24 }}>
+              {card.isCount ? card.value : formatCurrency(card.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background:'#071827', borderRadius:8, padding:'16px 16px 12px' }}>
+        <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Income — Last 6 Months</div>
+        <div style={{ position:'relative', height: BAR_H + 30 }}>
+          {[0.25, 0.5, 0.75, 1].map(p => (
+            <div key={p} style={{ position:'absolute', left:0, right:0, bottom: 24 + p * BAR_H, borderTop:'1px solid rgba(255,255,255,0.05)', zIndex:0 }}>
+              <span style={{ position:'absolute', right:'100%', paddingRight:6, fontSize:10, color:'rgba(255,255,255,0.2)', transform:'translateY(-50%)', whiteSpace:'nowrap' }}>
+                {formatCurrency(maxVal * p)}
+              </span>
+            </div>
+          ))}
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'flex-end', gap:6, paddingBottom:24, zIndex:1 }}>
+            {months.map(m => (
+              <div key={`${m.yr}-${m.mo}`} style={{ flex:1, height:'100%', display:'flex', flexDirection:'column', justifyContent:'flex-end', alignItems:'stretch', gap:2 }}>
+                <div style={{ display:'flex', gap:2, alignItems:'flex-end', height: BAR_H }}>
+                  <div title={`Billed: ${formatCurrency(m.billed)}`}
+                    style={{ flex:1, background:GOLD, borderRadius:'3px 3px 0 0',
+                      height: m.billed > 0 ? `${Math.max(3, Math.round(m.billed / maxVal * BAR_H))}px` : 0,
+                      transition:'height 0.4s ease', opacity:0.9 }} />
+                  <div title={`Paid: ${formatCurrency(m.paid)}`}
+                    style={{ flex:1, background:'#4caf50', borderRadius:'3px 3px 0 0',
+                      height: m.paid > 0 ? `${Math.max(3, Math.round(m.paid / maxVal * BAR_H))}px` : 0,
+                      transition:'height 0.4s ease', opacity:0.9 }} />
+                </div>
+                <div style={{ textAlign:'center', color:'#9fb0c6', fontSize:11, paddingTop:4 }}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:16, marginTop:4 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#9fb0c6' }}>
+            <div style={{ width:10, height:10, background:GOLD, borderRadius:2 }} /> Billed
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, color:'#9fb0c6' }}>
+            <div style={{ width:10, height:10, background:'#4caf50', borderRadius:2 }} /> Paid
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background:'#071827', borderRadius:8, padding:'16px', marginTop:14 }}>
+        <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Upcoming Payments</div>
+        {alerts.length === 0 ? (
+          <div style={{ color:'#7f98b0', fontSize:13 }}>No upcoming or overdue payment phases.</div>
+        ) : alerts.map((a, idx) => {
+          const isOverdue  = a.daysUntil < 0
+          const isToday    = a.daysUntil === 0
+          const accent     = isOverdue ? '#e05252' : isToday ? '#e8a020' : GOLD
+          const badge      = isOverdue ? `${Math.abs(a.daysUntil)}d overdue` : isToday ? 'Due today' : `In ${a.daysUntil}d`
+          const badgeBg    = isOverdue ? '#3d0a0a' : isToday ? '#2a1800' : '#1a1a00'
+          return (
+            <div key={`${a.doc.id}-${a.phaseKey}-${idx}`} style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, padding:'10px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ flex:'1 1 180px' }}>
+                <div style={{ fontWeight:700, color:'#fff', fontSize:14 }}>{a.doc.client || '(no client)'}</div>
+                <div style={{ color:'#9fb0c6', fontSize:12, marginTop:2 }}>{a.doc.doc_number} · {a.phaseLabel}</div>
+              </div>
+              <div style={{ textAlign:'right', flex:'0 0 auto' }}>
+                <div style={{ color:accent, fontWeight:700, fontSize:16 }}>{formatCurrency(a.amount)}</div>
+                <div style={{ color:'#7f98b0', fontSize:11, marginTop:1 }}>{a.doc.scheduled_date}</div>
+              </div>
+              <div style={{ background:badgeBg, color:accent, border:`1px solid ${accent}`, borderRadius:10, padding:'2px 10px', fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>{badge}</div>
+              <button onClick={()=>onMarkPaid(a.doc, a.phaseKey)} style={{ background:'#0f2740', color:'#4caf50', border:'1px solid #4caf50', padding:'4px 12px', borderRadius:6, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Mark Paid
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function HelpPanel({ onClose }) {
+  const [openSections, setOpenSections] = useState(new Set())
+  function toggle(i) {
+    setOpenSections(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  const sections = [
+    {
+      title: 'Creating a Quote',
+      desc: 'Build a professional plumbing quote with fixture counts, project type, and services.',
+      steps: [
+        'Click your name in the contractor buttons at the top of the toolbar.',
+        'Enter the Client name and job Address.',
+        'Choose the Project Type: New Construction or Service/Replacement.',
+        'Set the number of Houses/Units, Fixtures per House, and Price per Fixture.',
+        'Enable any additional services in the Independent Services section.',
+        'Add optional line items using the Add-ons section.',
+        'Click Save Document, then Print / PDF to generate the quote.',
+      ]
+    },
+    {
+      title: 'Converting to Invoice',
+      desc: 'Turn an accepted plumbing quote into a phase invoice — Underground, Rough-In, or Trim — with the correct amount due.',
+      steps: [
+        'Open a saved quote from the Saved Documents table at the bottom.',
+        'Click Convert to Invoice in the toolbar — the document gets a new INV-### number.',
+        'For New Construction, check only the phases being billed (e.g. Underground only).',
+        'The invoice total automatically updates to show only the selected phase amount plus independent services.',
+        'Save the document, then Print / PDF to deliver the invoice to your client.',
+      ]
+    },
+    {
+      title: 'Adding Independent Services',
+      desc: 'Bill plumbing services like Sewer Line, Gas Riser, or Water Heater separately or roll them into the fixture base total.',
+      steps: [
+        'Scroll to the Independent Services section.',
+        'Check the box next to a service to enable it and enter quantity and unit price.',
+        'For New Construction, each base service (Water Line, Gas Indoor, Water Heater, Manablok) has a % Based / Independent toggle.',
+        '% Based includes the service in the base total and splits it across the 30/50/20 phase schedule.',
+        'Independent bills the service as a separate line item not subject to phase splitting.',
+        'All non-base services are always billed independently.',
+      ]
+    },
+    {
+      title: 'Scheduling a Job',
+      desc: 'Assign a start date to any plumbing job and track all active jobs on a monthly calendar.',
+      steps: [
+        'Enter a date in the Schedule Date field at the top of the form (next to Client and Address).',
+        'Save the document — the date is stored with the document in Supabase.',
+        'Click Schedule in the toolbar to open the calendar view.',
+        'Documents with scheduled dates appear as colored blocks on their day (gold = quote, blue = invoice).',
+        'Click any day to see the jobs scheduled for that date including client, document number, and total.',
+        'Payment phase alerts fire automatically when a scheduled date is reached.',
+      ]
+    },
+    {
+      title: 'Managing Clients',
+      desc: 'View a full CRM summary of every plumbing client — quote history, invoices, and payment totals — built automatically from your saved documents.',
+      steps: [
+        'Click Clients in the toolbar.',
+        'The client list shows each client with quote count, invoice count, total billed, and total paid.',
+        'Rows are sorted by total billed — your biggest clients appear first.',
+        'Click any client row to see their full document history.',
+        'Click Open on any document to load it directly into the form.',
+        'Click ← All Clients to return to the list.',
+      ]
+    },
+    {
+      title: 'Using the Dashboard',
+      desc: 'Get a real-time overview of your plumbing business — monthly billings, income trends, and overdue phase payments across all active jobs.',
+      steps: [
+        'Click Dashboard in the toolbar.',
+        'The stat cards show this month\'s quote count, invoice count, total billed, total paid, and total pending.',
+        'The bar chart shows billed (gold) vs paid (green) income for the last 6 months. Hover a bar for the exact amount.',
+        'Upcoming Payments lists all overdue and future phase payments across all scheduled documents.',
+        'Red badges mean the payment is overdue; amber means due today; gold means upcoming.',
+        'Click Mark Paid next to any phase when payment is received — this is recorded in the document history.',
+        'An alert banner also appears at the top of the app whenever phases are overdue or due within 7 days.',
+      ]
+    },
+    {
+      title: 'Adding Job Photos',
+      desc: 'Upload before/after job site photos per plumbing client and optionally include them in printed quotes and invoices.',
+      steps: [
+        'Enter a client name in the Client field — the Client Photos section appears below.',
+        'Click + Add Photos to select one or more images from your device.',
+        'Photos are stored in Supabase and load automatically for that client on any document.',
+        'Click the ✕ button on a thumbnail to permanently delete a photo.',
+        'Check the Photos box in the toolbar to include photos in the print/PDF output.',
+        'Photos appear in a Work Photos section at the end of the printed document.',
+      ]
+    },
+    {
+      title: 'Printing and Emailing',
+      desc: 'Deliver polished plumbing quotes and invoices to your clients as PDFs or with a pre-filled email summary.',
+      steps: [
+        'Save the document first to ensure all data is current.',
+        'Click Print / PDF in the toolbar or at the bottom of the page.',
+        'In your browser\'s print dialog, choose Save as PDF to create a shareable file.',
+        'To email, click Send Email — your default email app opens with subject, client name, total, and payment schedule pre-filled.',
+        'The email body includes all payment schedule line items and a contact note.',
+        'Toggle Photos in the toolbar before printing if you want job photos on the last page.',
+      ]
+    },
+    {
+      title: 'Using Add-ons',
+      desc: 'Add-ons are extra charges not in the standard plumbing services list — things like permit fees, extra materials, or travel charges.',
+      steps: [
+        'Scroll to the Add-ons section below Independent Services.',
+        'Enter a description for the charge (e.g. "City Permit Fee", "Extra PEX tubing", "Travel charge").',
+        'Set the quantity and unit price, then click Add.',
+        'The add-on appears as a line item on the quote or invoice.',
+        'Add-ons are included in the document total and printed as their own section.',
+        'Click Remove next to any add-on to delete it from the document.',
+      ]
+    },
+  ]
+
+  return (
+    <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <h4 style={{ color:GOLD, margin:0 }}>Help &amp; Tutorial</h4>
+        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+      </div>
+      <p style={{ color:'#7f98b0', margin:'0 0 14px', fontSize:13 }}>Click a section to expand it.</p>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {sections.map((s, i) => {
+          const isOpen = openSections.has(i)
+          return (
+            <div key={i} style={{ background:'#071827', borderRadius:8, overflow:'hidden', border:`1px solid ${isOpen ? GOLD+'44' : 'transparent'}` }}>
+              <button onClick={()=>toggle(i)} style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left' }}>
+                <span style={{ background: isOpen ? GOLD : 'transparent', color: isOpen ? NAVY : GOLD, fontWeight:700, fontSize:12, width:24, height:24, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, border:`1px solid ${GOLD}`, transition:'all 0.15s' }}>{i + 1}</span>
+                <span style={{ color: isOpen ? GOLD : '#d0dce8', fontWeight:600, fontSize:14, flex:1 }}>{s.title}</span>
+                <span style={{ color:'#7f98b0', fontSize:12, userSelect:'none' }}>{isOpen ? '▲' : '▼'}</span>
+              </button>
+              {isOpen && (
+                <div style={{ padding:'0 18px 18px 52px' }}>
+                  <p style={{ color:'#9fb0c6', margin:'0 0 12px', fontSize:13, lineHeight:1.6 }}>{s.desc}</p>
+                  <ol style={{ margin:0, padding:'0 0 0 20px' }}>
+                    {s.steps.map((step, j) => (
+                      <li key={j} style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.9, paddingLeft:4 }}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ClientsPanel({ docs, onOpen, onClose }) {
+  const [selected, setSelected] = useState(null)
+
+  const clients = useMemo(() => {
+    const map = {}
+    docs.forEach(doc => {
+      const name = (doc.client || '').trim()
+      if (!name) return
+      if (!map[name]) map[name] = { name, quotes: 0, invoices: 0, billed: 0, paid: 0, docs: [] }
+      if (doc.doc_type === 'invoice') map[name].invoices++
+      else map[name].quotes++
+      map[name].billed += Number(doc.total) || 0
+      if (doc.status === 'paid') map[name].paid += Number(doc.total) || 0
+      map[name].docs.push(doc)
+    })
+    return Object.values(map).sort((a, b) => b.billed - a.billed)
+  }, [docs])
+
+  if (selected) {
+    const clientDocs = [...selected.docs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    return (
+      <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <button onClick={()=>setSelected(null)} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 12px', borderRadius:6, cursor:'pointer' }}>← All Clients</button>
+          <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+        </div>
+        <h4 style={{ color:GOLD, margin:'0 0 6px' }}>{selected.name}</h4>
+        <div style={{ display:'flex', gap:20, marginBottom:14, color:'#9fb0c6', fontSize:13, flexWrap:'wrap' }}>
+          <span>{selected.quotes} quote{selected.quotes !== 1 ? 's' : ''}</span>
+          <span>{selected.invoices} invoice{selected.invoices !== 1 ? 's' : ''}</span>
+          <span>Billed: <strong style={{ color:GOLD }}>{formatCurrency(selected.billed)}</strong></span>
+          <span>Paid: <strong style={{ color:'#4caf50' }}>{formatCurrency(selected.paid)}</strong></span>
+        </div>
+        <div style={{ background:'#071827', borderRadius:6, overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                {['Document','Type','Total','Status','Date',''].map(h => (
+                  <th key={h} style={{ textAlign:'left', padding:'10px', color:GOLD, fontWeight:600, fontSize:13 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {clientDocs.map(doc => (
+                <tr key={doc.id} style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+                  <td style={{ padding:'10px', color:'#fff', fontWeight:600 }}>{doc.doc_number || '—'}</td>
+                  <td style={{ padding:'10px', color:'#9fb0c6', textTransform:'capitalize' }}>{doc.doc_type || 'quote'}</td>
+                  <td style={{ padding:'10px', color:GOLD }}>{doc.total != null ? formatCurrency(doc.total) : '—'}</td>
+                  <td style={{ padding:'10px' }}>
+                    <span style={{ padding:'2px 8px', borderRadius:10, fontSize:11,
+                      background: doc.status==='paid' ? '#1a3d1a' : doc.status==='approved' ? '#1a2d3d' : doc.status==='sent' ? '#2a2010' : '#1a1a2d',
+                      color: doc.status==='paid' ? '#4caf50' : doc.status==='approved' ? '#7ab3e0' : doc.status==='sent' ? GOLD : '#9fb0c6' }}>
+                      {doc.status || 'draft'}
+                    </span>
+                  </td>
+                  <td style={{ padding:'10px', color:'#7f98b0', fontSize:12 }}>{doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '—'}</td>
+                  <td style={{ padding:'10px' }}>
+                    <button type='button' onClick={()=>onOpen(doc)} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'5px 10px', borderRadius:6, fontSize:12, cursor:'pointer' }}>Open</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+        <h4 style={{ color:GOLD, margin:0 }}>Clients</h4>
+        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+      </div>
+      {clients.length === 0 ? (
+        <div style={{ color:'#7f98b0', padding:'8px 0' }}>No clients yet — save some documents first.</div>
+      ) : (
+        <div style={{ background:'#071827', borderRadius:6, overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                {['Client','Quotes','Invoices','Total Billed','Total Paid',''].map((h,i) => (
+                  <th key={h} style={{ textAlign: i >= 3 ? 'right' : 'left', padding:'10px', color:GOLD, fontWeight:600, fontSize:13 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map(c => (
+                <tr key={c.name} onClick={()=>setSelected(c)} style={{ borderTop:'1px solid rgba(255,255,255,0.05)', cursor:'pointer' }}>
+                  <td style={{ padding:'10px', color:'#fff', fontWeight:600 }}>{c.name}</td>
+                  <td style={{ padding:'10px', color:'#9fb0c6' }}>{c.quotes}</td>
+                  <td style={{ padding:'10px', color:'#9fb0c6' }}>{c.invoices}</td>
+                  <td style={{ padding:'10px', color:GOLD, textAlign:'right' }}>{formatCurrency(c.billed)}</td>
+                  <td style={{ padding:'10px', color:'#4caf50', textAlign:'right' }}>{formatCurrency(c.paid)}</td>
+                  <td style={{ padding:'10px', color:'#7f98b0', fontSize:12, textAlign:'right' }}>View →</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScheduleCalendar({ docs, onClose }) {
+  const today = new Date()
+  const [year, setYear] = useState(today.getFullYear())
+  const [month, setMonth] = useState(today.getMonth())
+  const [selectedDay, setSelectedDay] = useState(null)
+
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const byDate = {}
+  docs.forEach(doc => {
+    if (!doc.scheduled_date) return
+    const key = doc.scheduled_date.slice(0, 10)
+    if (!byDate[key]) byDate[key] = []
+    byDate[key].push(doc)
+  })
+
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+  const monthLabel = new Date(year, month, 1).toLocaleString('default', { month: 'long', year: 'numeric' })
+
+  function dateKey(d) { return `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
+  function prevMonth() { if (month===0){setYear(y=>y-1);setMonth(11)}else setMonth(m=>m-1); setSelectedDay(null) }
+  function nextMonth() { if (month===11){setYear(y=>y+1);setMonth(0)}else setMonth(m=>m+1); setSelectedDay(null) }
+
+  const selectedDocs = selectedDay ? (byDate[dateKey(selectedDay)] || []) : []
+
+  return (
+    <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <h4 style={{ color:GOLD, margin:0 }}>Schedule</h4>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <button onClick={prevMonth} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:16 }}>‹</button>
+          <span style={{ color:GOLD, fontWeight:700, fontSize:15, minWidth:160, textAlign:'center' }}>{monthLabel}</span>
+          <button onClick={nextMonth} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:16 }}>›</button>
+        </div>
+        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:2, marginBottom:4 }}>
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+          <div key={d} style={{ textAlign:'center', color:'#7f98b0', fontSize:11, fontWeight:600, padding:'4px 0' }}>{d}</div>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:2 }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`e${idx}`} />
+          const key = dateKey(day)
+          const dayDocs = byDate[key] || []
+          const isToday = key === todayKey
+          const isSelected = selectedDay === day
+          return (
+            <div key={key} onClick={() => setSelectedDay(isSelected ? null : day)} style={{
+              minHeight:64, background: isSelected ? '#0f2740' : isToday ? '#0a2235' : '#081520',
+              border: isSelected ? `1px solid ${GOLD}` : isToday ? '1px solid #1a4060' : '1px solid #0d1e2e',
+              borderRadius:6, padding:'4px 6px', cursor:'pointer'
+            }}>
+              <div style={{ fontSize:11, color: isToday ? GOLD : '#9fb0c6', fontWeight: isToday ? 700 : 400, marginBottom:3 }}>{day}</div>
+              {dayDocs.slice(0,3).map(doc => (
+                <div key={doc.id} style={{
+                  fontSize:10, padding:'2px 4px', borderRadius:3, marginBottom:2,
+                  background: doc.doc_type==='invoice' ? '#1a3860' : '#2a1a10',
+                  color: doc.doc_type==='invoice' ? '#7ab3e0' : GOLD,
+                  overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis'
+                }}>
+                  {doc.doc_number}{doc.client ? ` · ${doc.client}` : ''}
+                </div>
+              ))}
+              {dayDocs.length > 3 ? <div style={{ fontSize:10, color:'#7f98b0' }}>+{dayDocs.length-3} more</div> : null}
+            </div>
+          )
+        })}
+      </div>
+
+      {selectedDay ? (
+        <div style={{ marginTop:14, background:'#071827', borderRadius:8, padding:14 }}>
+          <div style={{ color:GOLD, fontWeight:700, marginBottom:10 }}>
+            {new Date(year, month, selectedDay).toLocaleDateString('default', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}
+          </div>
+          {selectedDocs.length === 0 ? (
+            <div style={{ color:'#7f98b0' }}>No jobs scheduled this day</div>
+          ) : selectedDocs.map(doc => (
+            <div key={doc.id} style={{ background:'#0a1e32', borderRadius:6, padding:'10px 14px', marginBottom:8, borderLeft:`3px solid ${doc.doc_type==='invoice' ? '#7ab3e0' : GOLD}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ fontWeight:700, color:'#fff' }}>{doc.doc_number}</div>
+                <div style={{ color:GOLD, fontWeight:700 }}>{doc.total != null ? formatCurrency(doc.total) : '—'}</div>
+              </div>
+              {doc.client ? <div style={{ color:'#9fb0c6', marginTop:3 }}>{doc.client}</div> : null}
+              {doc.address ? <div style={{ color:'#7f98b0', fontSize:12, marginTop:2 }}>{doc.address}</div> : null}
+              <div style={{ color:'#7f98b0', fontSize:11, marginTop:4, textTransform:'capitalize' }}>{doc.doc_type} · {doc.status || 'draft'}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
