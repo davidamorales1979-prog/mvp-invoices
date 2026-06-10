@@ -119,6 +119,7 @@ export default function AppNew(){
   const [subscription, setSubscription] = useState(null)
   const [subLoading, setSubLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [billingPortalLoading, setBillingPortalLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
@@ -258,6 +259,20 @@ export default function AppNew(){
     } catch (e) {
       alert('Could not start checkout: ' + e.message)
       setCheckoutLoading(false)
+    }
+  }
+
+  async function openBillingPortal(){
+    setBillingPortalLoading(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal', {
+        body: { origin: window.location.origin }
+      })
+      if (error || !data?.url) throw new Error(error?.message || 'No portal URL returned')
+      window.location.href = data.url
+    } catch (e) {
+      alert('Could not open billing portal: ' + e.message)
+      setBillingPortalLoading(false)
     }
   }
 
@@ -951,6 +966,12 @@ export default function AppNew(){
               name1={profileName1}
               name2={profileName2}
               name3={profileName3}
+              subscription={subscription}
+              trialDaysLeft={trialDaysLeft}
+              subscribeLoading={checkoutLoading}
+              billingPortalLoading={billingPortalLoading}
+              onSubscribe={startCheckout}
+              onManageBilling={openBillingPortal}
               onSave={async (company, n1, n2, n3) => {
                 const { data, error } = await supabase
                   .from('profiles')
@@ -1957,7 +1978,7 @@ function ScheduleCalendar({ docs, onClose }) {
   )
 }
 
-function SettingsPanel({ user, company, name1, name2, name3, onSave, onClose }) {
+function SettingsPanel({ user, company, name1, name2, name3, subscription, trialDaysLeft, subscribeLoading, billingPortalLoading, onSubscribe, onManageBilling, onSave, onClose }) {
   const [co, setCo] = useState(company || '')
   const [n1, setN1] = useState(name1 || '')
   const [n2, setN2] = useState(name2 || '')
@@ -1977,6 +1998,18 @@ function SettingsPanel({ user, company, name1, name2, name3, onSave, onClose }) 
   const fieldStyle = { width:'100%', padding:'9px 12px', borderRadius:6, border:'1px solid #223', background:'#0a1e32', color:'#fff', boxSizing:'border-box', fontSize:14 }
   const labelStyle = { display:'block', marginBottom:6, color:'#9fb0c6', fontSize:13 }
 
+  const status = subscription?.status
+  const isActive   = status === 'active'
+  const isTrialing = status === 'trialing'
+  const isPastDue  = status === 'past_due'
+  const isCanceled = status === 'canceled'
+
+  const statusBadge = isActive   ? { label:'Active',       bg:'#1a3d1a', color:'#4caf50' }
+                    : isTrialing  ? { label:'Free Trial',   bg:'#1a2a10', color:'#a0cc60' }
+                    : isPastDue   ? { label:'Past Due',     bg:'#3d1a0a', color:'#e87040' }
+                    : isCanceled  ? { label:'Canceled',     bg:'#2a0a0a', color:'#e05252' }
+                    :               { label:'No Plan',      bg:'#1a1a2d', color:'#9fb0c6' }
+
   return (
     <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:20 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
@@ -1984,40 +2017,112 @@ function SettingsPanel({ user, company, name1, name2, name3, onSave, onClose }) 
         <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
       </div>
 
-      <div style={{ maxWidth:480 }}>
-        <div style={{ marginBottom:16 }}>
-          <label style={labelStyle}>Company Name *</label>
-          <input value={co} onChange={e=>setCo(e.target.value)} placeholder='Your company name' style={fieldStyle} />
-        </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, alignItems:'start' }}>
 
-        {[
-          { label:'Contractor Name 1 *', val:n1, set:setN1, required:true },
-          { label:'Contractor Name 2', val:n2, set:setN2, required:false },
-          { label:'Contractor Name 3', val:n3, set:setN3, required:false },
-        ].map(({ label, val, set, required }) => (
-          <div key={label} style={{ marginBottom:16 }}>
-            <label style={labelStyle}>{label}{!required && <span style={{ color:'#7f98b0', fontWeight:400 }}> (optional)</span>}</label>
-            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-              <input value={val} onChange={e=>set(e.target.value)} placeholder='e.g. John Smith' style={{ ...fieldStyle, flex:1 }} />
-              {!required && val ? (
-                <button onClick={()=>set('')} title='Remove' style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'7px 10px', cursor:'pointer', fontSize:14, lineHeight:1 }}>✕</button>
-              ) : null}
-            </div>
+        {/* Profile section */}
+        <div>
+          <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Company Profile</div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={labelStyle}>Company Name *</label>
+            <input value={co} onChange={e=>setCo(e.target.value)} placeholder='Your company name' style={fieldStyle} />
           </div>
-        ))}
 
-        {msg ? (
-          <div style={{ color: msg === 'Settings saved.' ? '#4caf50' : GOLD, marginBottom:14, fontSize:13 }}>{msg}</div>
-        ) : null}
+          {[
+            { label:'Contractor Name 1 *', val:n1, set:setN1, required:true },
+            { label:'Contractor Name 2',   val:n2, set:setN2, required:false },
+            { label:'Contractor Name 3',   val:n3, set:setN3, required:false },
+          ].map(({ label, val, set, required }) => (
+            <div key={label} style={{ marginBottom:14 }}>
+              <label style={labelStyle}>{label}{!required && <span style={{ color:'#7f98b0', fontWeight:400 }}> (optional)</span>}</label>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input value={val} onChange={e=>set(e.target.value)} placeholder='e.g. John Smith' style={{ ...fieldStyle, flex:1 }} />
+                {!required && val ? (
+                  <button onClick={()=>set('')} title='Remove' style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'7px 10px', cursor:'pointer', fontSize:14, lineHeight:1 }}>✕</button>
+                ) : null}
+              </div>
+            </div>
+          ))}
 
-        <div style={{ display:'flex', gap:10 }}>
-          <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-          <button onClick={onClose} style={{ padding:'10px 16px', borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
-            Cancel
-          </button>
+          {msg ? (
+            <div style={{ color: msg === 'Settings saved.' ? '#4caf50' : GOLD, marginBottom:12, fontSize:13 }}>{msg}</div>
+          ) : null}
+
+          <div style={{ display:'flex', gap:10 }}>
+            <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button onClick={onClose} style={{ padding:'10px 16px', borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
+              Cancel
+            </button>
+          </div>
         </div>
+
+        {/* Billing section */}
+        <div style={{ background:'#071827', borderRadius:8, padding:18 }}>
+          <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Billing</div>
+
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+            <span style={{ background:statusBadge.bg, color:statusBadge.color, border:`1px solid ${statusBadge.color}44`, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700 }}>
+              {statusBadge.label}
+            </span>
+            {isTrialing && trialDaysLeft > 0 && (
+              <span style={{ color:'#9fb0c6', fontSize:13 }}>{trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining</span>
+            )}
+            {isTrialing && trialDaysLeft === 0 && (
+              <span style={{ color:'#e87040', fontSize:13 }}>Trial expired</span>
+            )}
+          </div>
+
+          <div style={{ background:'#0a1628', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
+            <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Plan</div>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:16 }}>FieldQuote</div>
+            <div style={{ color:GOLD, fontSize:22, fontWeight:700, marginTop:4 }}>$29<span style={{ fontSize:13, color:'#7f98b0', fontWeight:400 }}>/month</span></div>
+            <div style={{ color:'#7f98b0', fontSize:12, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
+          </div>
+
+          {isTrialing && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10, lineHeight:1.5 }}>
+                {trialDaysLeft > 0
+                  ? `Your free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}. Subscribe now to keep your access without interruption.`
+                  : 'Your free trial has ended. Subscribe to continue using FieldQuote.'}
+              </div>
+              <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                {subscribeLoading ? 'Redirecting to Stripe…' : 'Subscribe — $29/month'}
+              </button>
+            </div>
+          )}
+
+          {(isPastDue || isCanceled || (!subscription)) && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
+                {isPastDue   ? 'Your last payment failed. Update your payment method to restore access.'
+                 : isCanceled ? 'Your subscription was canceled. Resubscribe to continue.'
+                 :              'No active subscription found.'}
+              </div>
+              <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                {subscribeLoading ? 'Redirecting to Stripe…' : isPastDue ? 'Update Payment Method' : 'Subscribe — $29/month'}
+              </button>
+            </div>
+          )}
+
+          {isActive && (
+            <div>
+              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
+                Your subscription is active. Use the billing portal to update payment info, download invoices, or cancel.
+              </div>
+              <button onClick={onManageBilling} disabled={billingPortalLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                {billingPortalLoading ? 'Opening portal…' : 'Manage Billing'}
+              </button>
+            </div>
+          )}
+
+          <div style={{ marginTop:14, color:'#7f98b0', fontSize:11 }}>
+            Payments are processed securely by Stripe. FieldQuote does not store your card details.
+          </div>
+        </div>
+
       </div>
     </div>
   )
