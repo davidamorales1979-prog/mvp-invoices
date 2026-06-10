@@ -943,6 +943,33 @@ export default function AppNew(){
           {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700 }}>{saveMessage}</div> : null}
         </div>
 
+        {showSettings ? (
+          <div className='no-print'>
+            <SettingsPanel
+              user={user}
+              company={profileCompany}
+              name1={profileName1}
+              name2={profileName2}
+              name3={profileName3}
+              onSave={async (company, n1, n2, n3) => {
+                const { data, error } = await supabase
+                  .from('profiles')
+                  .upsert([{ user_id: user.id, company_name: company, name1: n1 || null, name2: n2 || null, name3: n3 || null }], { onConflict: 'user_id' })
+                  .select().maybeSingle()
+                if (error) return error.message
+                setProfile(data)
+                setProfileCompany(data.company_name || '')
+                setProfileName1(data.name1 || '')
+                setProfileName2(data.name2 || '')
+                setProfileName3(data.name3 || '')
+                setContractor(data.name1 || data.company_name || 'MVP Solutions')
+                return null
+              }}
+              onClose={()=>setShowSettings(false)}
+            />
+          </div>
+        ) : null}
+
         {(() => {
           const overdue  = paymentAlerts.filter(a => a.daysUntil < 0).length
           const dueToday = paymentAlerts.filter(a => a.daysUntil === 0).length
@@ -1251,33 +1278,6 @@ export default function AppNew(){
         {showHelp ? (
           <div className='no-print'>
             <HelpPanel onClose={()=>setShowHelp(false)} />
-          </div>
-        ) : null}
-
-        {showSettings ? (
-          <div className='no-print'>
-            <SettingsPanel
-              user={user}
-              company={profileCompany}
-              name1={profileName1}
-              name2={profileName2}
-              name3={profileName3}
-              onSave={async (company, n1, n2, n3) => {
-                const { data, error } = await supabase
-                  .from('profiles')
-                  .upsert([{ user_id: user.id, company_name: company, name1: n1 || null, name2: n2 || null, name3: n3 || null }], { onConflict: 'user_id' })
-                  .select().maybeSingle()
-                if (error) return error.message
-                setProfile(data)
-                setProfileCompany(data.company_name || '')
-                setProfileName1(data.name1 || '')
-                setProfileName2(data.name2 || '')
-                setProfileName3(data.name3 || '')
-                setContractor(data.name1 || data.company_name || 'MVP Solutions')
-                return null
-              }}
-              onClose={()=>setShowSettings(false)}
-            />
           </div>
         ) : null}
 
