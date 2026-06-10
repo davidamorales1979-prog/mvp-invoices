@@ -119,6 +119,7 @@ export default function AppNew(){
   const [subscription, setSubscription] = useState(null)
   const [subLoading, setSubLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -935,6 +936,7 @@ export default function AppNew(){
             <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
+            <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
           </div>
           <div style={{ marginLeft:'auto', color:'#9fb0c6' }}>{user?.email}</div>
@@ -1249,6 +1251,33 @@ export default function AppNew(){
         {showHelp ? (
           <div className='no-print'>
             <HelpPanel onClose={()=>setShowHelp(false)} />
+          </div>
+        ) : null}
+
+        {showSettings ? (
+          <div className='no-print'>
+            <SettingsPanel
+              user={user}
+              company={profileCompany}
+              name1={profileName1}
+              name2={profileName2}
+              name3={profileName3}
+              onSave={async (company, n1, n2, n3) => {
+                const { data, error } = await supabase
+                  .from('profiles')
+                  .upsert([{ user_id: user.id, company_name: company, name1: n1 || null, name2: n2 || null, name3: n3 || null }], { onConflict: 'user_id' })
+                  .select().maybeSingle()
+                if (error) return error.message
+                setProfile(data)
+                setProfileCompany(data.company_name || '')
+                setProfileName1(data.name1 || '')
+                setProfileName2(data.name2 || '')
+                setProfileName3(data.name3 || '')
+                setContractor(data.name1 || data.company_name || 'MVP Solutions')
+                return null
+              }}
+              onClose={()=>setShowSettings(false)}
+            />
           </div>
         ) : null}
 
@@ -1924,6 +1953,72 @@ function ScheduleCalendar({ docs, onClose }) {
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function SettingsPanel({ user, company, name1, name2, name3, onSave, onClose }) {
+  const [co, setCo] = useState(company || '')
+  const [n1, setN1] = useState(name1 || '')
+  const [n2, setN2] = useState(name2 || '')
+  const [n3, setN3] = useState(name3 || '')
+  const [msg, setMsg] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!co.trim() || !n1.trim()) { setMsg('Company name and at least one contractor name are required.'); return }
+    setSaving(true)
+    setMsg('')
+    const err = await onSave(co.trim(), n1.trim(), n2.trim(), n3.trim())
+    setSaving(false)
+    setMsg(err || 'Settings saved.')
+  }
+
+  const fieldStyle = { width:'100%', padding:'9px 12px', borderRadius:6, border:'1px solid #223', background:'#0a1e32', color:'#fff', boxSizing:'border-box', fontSize:14 }
+  const labelStyle = { display:'block', marginBottom:6, color:'#9fb0c6', fontSize:13 }
+
+  return (
+    <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+        <h4 style={{ color:GOLD, margin:0 }}>Settings</h4>
+        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+      </div>
+
+      <div style={{ maxWidth:480 }}>
+        <div style={{ marginBottom:16 }}>
+          <label style={labelStyle}>Company Name *</label>
+          <input value={co} onChange={e=>setCo(e.target.value)} placeholder='Your company name' style={fieldStyle} />
+        </div>
+
+        {[
+          { label:'Contractor Name 1 *', val:n1, set:setN1, required:true },
+          { label:'Contractor Name 2', val:n2, set:setN2, required:false },
+          { label:'Contractor Name 3', val:n3, set:setN3, required:false },
+        ].map(({ label, val, set, required }) => (
+          <div key={label} style={{ marginBottom:16 }}>
+            <label style={labelStyle}>{label}{!required && <span style={{ color:'#7f98b0', fontWeight:400 }}> (optional)</span>}</label>
+            <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+              <input value={val} onChange={e=>set(e.target.value)} placeholder='e.g. John Smith' style={{ ...fieldStyle, flex:1 }} />
+              {!required && val ? (
+                <button onClick={()=>set('')} title='Remove' style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'7px 10px', cursor:'pointer', fontSize:14, lineHeight:1 }}>✕</button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+
+        {msg ? (
+          <div style={{ color: msg === 'Settings saved.' ? '#4caf50' : GOLD, marginBottom:14, fontSize:13 }}>{msg}</div>
+        ) : null}
+
+        <div style={{ display:'flex', gap:10 }}>
+          <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+          <button onClick={onClose} style={{ padding:'10px 16px', borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
