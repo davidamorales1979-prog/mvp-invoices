@@ -929,6 +929,26 @@ export default function AppNew(){
   return (
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
+
+        {subscription?.status === 'trialing' && (
+          <div className='no-print' style={{ margin:'-18px -18px 18px -18px', padding:'10px 20px', background: trialDaysLeft <= 7 ? '#2a0e00' : '#0f1e0a', borderBottom:`2px solid ${trialDaysLeft <= 7 ? '#e87040' : GOLD}`, borderRadius:'8px 8px 0 0', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:18, lineHeight:1 }}>{trialDaysLeft <= 7 ? '⚠' : '🕐'}</span>
+              <div>
+                <span style={{ color: trialDaysLeft <= 7 ? '#e87040' : GOLD, fontWeight:700, fontSize:13 }}>
+                  {trialDaysLeft === 0 ? 'Free trial expired' : `Free trial — ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''} remaining`}
+                </span>
+                <span style={{ color:'#9fb0c6', fontSize:12, marginLeft:8 }}>
+                  {trialDaysLeft === 0 ? 'Subscribe to keep your access.' : 'Subscribe before your trial ends to avoid interruption.'}
+                </span>
+              </div>
+            </div>
+            <button onClick={startCheckout} disabled={checkoutLoading} style={{ background:GOLD, color:NAVY, border:'none', padding:'7px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap', flexShrink:0 }}>
+              {checkoutLoading ? 'Redirecting…' : 'Subscribe — $29/mo'}
+            </button>
+          </div>
+        )}
+
         <div className='invoice-header screen-only' style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <img src='/logo.svg' alt='FieldQuote' style={{ height:64, width:'auto' }} />
           <div style={{ textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>{docType.toUpperCase()}</div><div style={{ color:GOLD, fontWeight:700 }}>{docNumber}</div></div>
@@ -1015,18 +1035,6 @@ export default function AppNew(){
           )
         })()}
 
-        {subscription?.status === 'trialing' && trialDaysLeft <= 14 && (
-          <div className='no-print' style={{ margin:'10px 0 0', padding:'10px 16px', background:'#1a0e00', border:`1px solid ${GOLD}`, borderRadius:8, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
-            <div style={{ color:'#d4aa5a', fontSize:13 }}>
-              {trialDaysLeft === 0
-                ? 'Your free trial has expired.'
-                : `Free trial — ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''} remaining.`}
-            </div>
-            <button onClick={startCheckout} disabled={checkoutLoading} style={{ background:GOLD, color:NAVY, border:'none', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:12, whiteSpace:'nowrap' }}>
-              {checkoutLoading ? '…' : 'Subscribe $29/mo'}
-            </button>
-          </div>
-        )}
 
         <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
           <div>
