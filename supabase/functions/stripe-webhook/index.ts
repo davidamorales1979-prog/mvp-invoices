@@ -36,136 +36,112 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
   )
 
-  // Find the user_id for a given Stripe customer ID.
-  // Primary: look up by stripe_customer_id in subscriptions table.
-  // Fallback: retrieve the Stripe customer and read user_id from its metadata.
+  // Resolve user_id from a Stripe customer ID.
+  // Primary: subscriptions table lookup by stripe_customer_id.
+  // Fallback: Stripe customer metadata.user_id.
   async function resolveUserId(customerId) {
     const { data, error } = await supabase
       .from('subscriptions')
       .select('user_id')
       .eq('stripe_customer_id', customerId)
       .maybeSingle()
-
     if (data?.user_id) return data.user_id
-
-    if (error) console.error('resolveUserId primary lookup error:', error.message)
-
-    // Fallback: read user_id from Stripe customer metadata
+    if (error) console.error('resolveUserId DB error:', error.message)
     try {
       const customer = await stripe.customers.retrieve(customerId)
       if (!customer.deleted && customer.metadata?.user_id) {
-        console.log('resolveUserId: using metadata fallback for', customerId)
+        console.log('resolveUserId: metadata fallback for customer', customerId)
         return customer.metadata.user_id
       }
     } catch (e) {
-      console.error('resolveUserId metadata fallback error:', e.message)
+      console.error('resolveUserId Stripe error:', e.message)
     }
-
     return null
   }
 
+  // Write subscription state for a given user_id.
+  async function updateSubscription(userId, stripeSub, label) {
+    const { error } = await supabase
+      .from('subscriptions')
+      .update({
+        stripe_subscription_id: stripeSub.id,
+        status: stripeSub.status,
+        trial_end: toISO(stripeSub.trial_end),
+        current_period_end: toISO(stripeSub.current_period_end),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+    if (error) {
+      console.error(`${label}: DB update failed:`, error.message)
+    } else {
+      console.log(`${label}: user ${userId} → status: ${stripeSub.status}`)
+    }
+  }
+
   try {
-    console.log('Processing webhook event:', event.type)
+    console.log('Event:', event.type)
 
     switch (event.type) {
 
+      // Checkout completed — subscription created via Stripe Checkout
       case 'checkout.session.completed': {
         const session = event.data.object
         if (session.mode !== 'subscription') break
         if (!session.subscription) {
-          console.error('checkout.session.completed: no subscription ID on session')
+          console.error('checkout.session.completed: missing subscription ID')
           break
         }
-
         const stripeSub = await stripe.subscriptions.retrieve(session.subscription)
         const userId = await resolveUserId(session.customer)
-
         if (!userId) {
-          console.error('checkout.session.completed: could not resolve user_id for customer', session.customer)
+          console.error('checkout.session.completed: could not resolve user for customer', session.customer)
           break
         }
-
-        const { error: updateError } = await supabase
+        // Also save stripe_customer_id in case it wasn't saved during checkout creation
+        await supabase
           .from('subscriptions')
-          .update({
-            stripe_customer_id: session.customer,
-            stripe_subscription_id: stripeSub.id,
-            status: stripeSub.status,
-            trial_end: toISO(stripeSub.trial_end),
-            current_period_end: toISO(stripeSub.current_period_end),
-            updated_at: new Date().toISOString(),
-          })
+          .update({ stripe_customer_id: session.customer })
           .eq('user_id', userId)
-
-        if (updateError) {
-          console.error('checkout.session.completed: update failed:', updateError.message)
-        } else {
-          console.log('checkout.session.completed: updated subscription for user', userId, '→ status:', stripeSub.status)
-        }
+          .is('stripe_customer_id', null)
+        await updateSubscription(userId, stripeSub, 'checkout.session.completed')
         break
       }
 
+      // New subscription created (fires alongside checkout.session.completed)
+      case 'customer.subscription.created':
+      // Subscription renewed, upgraded, canceled, paused, etc.
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const stripeSub = event.data.object
-
-        // Try updating by stripe_subscription_id first
-        const { error: subUpdateError, count } = await supabase
-          .from('subscriptions')
-          .update({
-            status: stripeSub.status,
-            trial_end: toISO(stripeSub.trial_end),
-            current_period_end: toISO(stripeSub.current_period_end),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('stripe_subscription_id', stripeSub.id)
-
-        if (subUpdateError) {
-          console.error(`${event.type}: update by sub ID failed:`, subUpdateError.message)
+        // Always resolve via customer ID — stripe_subscription_id may not be in DB yet
+        const userId = await resolveUserId(stripeSub.customer)
+        if (!userId) {
+          console.error(`${event.type}: could not resolve user for customer`, stripeSub.customer)
+          break
         }
-
-        // If no row matched by subscription ID, fall back to customer ID
-        if (!subUpdateError && count === 0) {
-          const userId = await resolveUserId(stripeSub.customer)
-          if (userId) {
-            const { error: fallbackError } = await supabase
-              .from('subscriptions')
-              .update({
-                stripe_subscription_id: stripeSub.id,
-                status: stripeSub.status,
-                trial_end: toISO(stripeSub.trial_end),
-                current_period_end: toISO(stripeSub.current_period_end),
-                updated_at: new Date().toISOString(),
-              })
-              .eq('user_id', userId)
-            if (fallbackError) console.error(`${event.type}: fallback update failed:`, fallbackError.message)
-            else console.log(`${event.type}: fallback update succeeded for user`, userId)
-          }
-        } else {
-          console.log(`${event.type}: updated subscription`, stripeSub.id, '→ status:', stripeSub.status)
-        }
+        await updateSubscription(userId, stripeSub, event.type)
         break
       }
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object
         if (!invoice.subscription) break
-
-        const { error: pfError } = await supabase
+        const userId = await resolveUserId(invoice.customer)
+        if (!userId) {
+          console.error('invoice.payment_failed: could not resolve user for customer', invoice.customer)
+          break
+        }
+        const { error } = await supabase
           .from('subscriptions')
-          .update({
-            status: 'past_due',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('stripe_subscription_id', invoice.subscription)
-
-        if (pfError) console.error('invoice.payment_failed: update failed:', pfError.message)
-        else console.log('invoice.payment_failed: marked past_due for sub', invoice.subscription)
+          .update({ status: 'past_due', updated_at: new Date().toISOString() })
+          .eq('user_id', userId)
+        if (error) console.error('invoice.payment_failed: update failed:', error.message)
+        else console.log('invoice.payment_failed: marked past_due for user', userId)
         break
       }
 
       default:
-        console.log('Unhandled event type:', event.type)
+        console.log('Unhandled event:', event.type)
     }
   } catch (err) {
     console.error('Webhook handler error:', err.message)
