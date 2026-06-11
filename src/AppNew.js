@@ -27,7 +27,7 @@ const SERVICES = [
   { id: 'cut_bust', name: 'Cut and Bust Concrete', unit: 200 }
 ]
 
-const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater', 'manablok']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'manablok']
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
 function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
@@ -1243,7 +1243,7 @@ export default function AppNew(){
           <div className='fixtures-row' style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
             <div><label style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</label><input type='number' value={houses} onChange={e=>setHouses(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
             <div><label style={{ color:'#9fb0c6' }}>Property Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Multi-family</option><option>Commercial</option><option>Industrial</option></select></div>
-            <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option></select></div>
+            <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option><option>Commercial</option><option>Industrial</option></select></div>
             <div><label style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</label><input type='number' value={fixturesPerHouse} onChange={e=>setFixturesPerHouse(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
             <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
             <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
@@ -1551,7 +1551,7 @@ export default function AppNew(){
                     </tbody>
                   </table>
                 ) : null}
-                {projectType === 'Service/Replacement' ? (
+                {projectType !== 'New Construction' ? (
                   <table className='print-table' style={{ marginTop: 12 }}>
                     <thead>
                       <tr>
