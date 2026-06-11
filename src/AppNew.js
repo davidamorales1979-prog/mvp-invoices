@@ -2065,6 +2065,59 @@ function HelpPanel({ onClose }) {
         'Click Remove next to any add-on to delete it from the document.',
       ]
     },
+    {
+      title: 'Settings — Company & Contractor Names',
+      desc: 'Update your company name and the contractor names that appear on every quote and invoice.',
+      steps: [
+        'Click Settings in the toolbar.',
+        'Under Company Profile, enter your company name and up to three contractor names.',
+        'Contractor Name 1 is required — it appears as the default selected contractor.',
+        'Names 2 and 3 are optional. Click the ✕ next to a name to remove it.',
+        'Click Save Changes. Your contractor name buttons in the toolbar update immediately.',
+        'The company name and contractor names print on every quote and invoice header.',
+      ]
+    },
+    {
+      title: 'Billing — Trial & Subscription',
+      desc: 'FieldQuote includes a free trial. Subscribe to keep full access once the trial ends.',
+      steps: [
+        'Your free trial starts automatically when you first sign up — no credit card required.',
+        'The trial banner at the top of the app shows how many days remain.',
+        'Click Settings in the toolbar to see your current plan status under Billing.',
+        'When the trial ends, click Subscribe — $29/month to be taken to Stripe checkout.',
+        'After subscribing, the status badge changes to Active and the trial banner disappears.',
+        'To update your payment method, download receipts, or cancel, click Manage Billing inside Settings.',
+        'Only the account admin can see and manage billing — team members do not have access.',
+      ]
+    },
+    {
+      title: 'Digital Signature',
+      desc: 'Send a signature link to your client so they can sign the quote on their phone. The signature is saved and appears on the printed PDF.',
+      steps: [
+        'Build and save the quote you want the client to sign.',
+        'Click the Signature button in the toolbar (shows a checkmark once signed).',
+        'A unique link is generated — click Copy Link to copy it to your clipboard.',
+        'Send the link to your client by text or email. No login is required on their end.',
+        'The client opens the link on any device, reviews the quote summary, types their name, and signs with their finger or mouse.',
+        'Once submitted, the Signature button turns green with a checkmark.',
+        'The signature, signer name, and date automatically appear at the bottom of the printed PDF.',
+        'To see the signature preview inside the app, open the Signature panel again.',
+      ]
+    },
+    {
+      title: 'Team Members',
+      desc: 'Invite your crew to FieldQuote. Team members can create and edit quotes and invoices but cannot delete documents, manage billing, or invite others.',
+      steps: [
+        'Click Settings in the toolbar — the Team section appears at the bottom (admin only).',
+        'Enter a team member\'s email address and click Invite.',
+        'A unique invite link is generated — click Copy and send it to them by text or email.',
+        'The invited person opens the link, signs in or creates a free account, and clicks Accept Invite.',
+        'Once accepted, their status changes from Pending to Active in your Team list.',
+        'Active members see all the same quotes and invoices as the admin account.',
+        'Members cannot delete documents, access billing, or manage team members.',
+        'To remove a team member, click Remove next to their name. Their account reverts to an independent FieldQuote account.',
+      ]
+    },
   ]
 
   return (
