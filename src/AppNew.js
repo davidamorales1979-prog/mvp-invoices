@@ -2913,17 +2913,32 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
     setInviting(true)
     setInviteMsg('')
     setInviteLink('')
-    const { data, error } = await supabase.from('team_members')
-      .insert([{ account_id: accountId, email: inviteEmail.trim().toLowerCase(), role: 'member', status: 'pending' }])
-      .select('invite_token').single()
+    const sentTo = inviteEmail.trim().toLowerCase()
+    const { data, error } = await supabase.functions.invoke('send-team-invite', { body: { email: sentTo } })
     setInviting(false)
-    if (error) { setInviteMsg(error.message); return }
-    const link = `${window.location.origin}/?join=${data.invite_token}`
-    setInviteLink(link)
+    if (error || data?.error) { setInviteMsg(data?.error || error.message); return }
+    if (data?.manualLink) {
+      setInviteLink(data.manualLink)
+      setInviteMsg(data.message || 'Share this link to invite them:')
+    } else {
+      setInviteMsg(`Invitation email sent to ${sentTo}`)
+    }
     setInviteEmail('')
-    setInviteMsg('Invite created. Share this link:')
     const { data: members } = await supabase.from('team_members').select('*').eq('account_id', accountId).order('invited_at', { ascending: false })
     setTeamMembers(members || [])
+  }
+
+  async function handleResend(email) {
+    setInviteMsg('')
+    setInviteLink('')
+    const { data, error } = await supabase.functions.invoke('send-team-invite', { body: { email } })
+    if (error || data?.error) { setInviteMsg(data?.error || error.message); return }
+    if (data?.manualLink) {
+      setInviteLink(data.manualLink)
+      setInviteMsg(data.message || 'Share this link to invite them:')
+    } else {
+      setInviteMsg(`Invitation resent to ${email}`)
+    }
   }
 
   async function handleRemove(memberId) {
@@ -3134,36 +3149,51 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
               </div>
 
               {inviteMsg && (
-                <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:8 }}>{inviteMsg}</div>
+                <div style={{
+                  color: inviteMsg.startsWith('Invitation') || inviteMsg.startsWith('Resent') ? '#4caf50'
+                       : inviteMsg.includes('already has') || inviteMsg.includes('Share') ? GOLD
+                       : '#e05252',
+                  fontSize:13, marginBottom:8, lineHeight:1.5
+                }}>{inviteMsg}</div>
               )}
               {inviteLink && (
                 <div style={{ display:'flex', gap:8, marginBottom:12 }}>
                   <input readOnly value={inviteLink} style={{ flex:1, padding:'7px 10px', borderRadius:6, border:'1px solid #334', background:'#0a1628', color:'#c9d8e8', fontSize:12 }} onClick={e=>e.target.select()} />
-                  <button onClick={()=>navigator.clipboard.writeText(inviteLink)} style={{ padding:'7px 12px', borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontSize:12, cursor:'pointer' }}>Copy</button>
+                  <button onClick={()=>{ navigator.clipboard.writeText(inviteLink); setInviteMsg('Link copied!') }} style={{ padding:'7px 12px', borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontSize:12, cursor:'pointer' }}>Copy</button>
                 </div>
               )}
 
               {teamLoading ? (
                 <div style={{ color:'#7f98b0', fontSize:13 }}>Loading…</div>
               ) : teamMembers.length === 0 ? (
-                <div style={{ color:'#7f98b0', fontSize:13 }}>No team members yet. Invite someone above.</div>
+                <div style={{ color:'#7f98b0', fontSize:13 }}>No team members yet. Enter an email above to send an invite.</div>
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                   {teamMembers.map(m => (
-                    <div key={m.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#0a1628', borderRadius:6, padding:'8px 12px' }}>
-                      <div>
-                        <div style={{ color:'#fff', fontSize:13, fontWeight:600 }}>{m.email}</div>
+                    <div key={m.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#0a1628', borderRadius:6, padding:'8px 12px', gap:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ color:'#fff', fontSize:13, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.email}</div>
                         <div style={{ color: m.status === 'active' ? '#4caf50' : '#7f98b0', fontSize:11, marginTop:2 }}>
-                          {m.status === 'active' ? 'Active' : 'Pending invite'}
+                          {m.status === 'active' ? 'Active member' : 'Invite pending'}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleRemove(m.id)}
-                        disabled={removingId === m.id}
-                        style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}
-                      >
-                        {removingId === m.id ? '…' : 'Remove'}
-                      </button>
+                      <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                        {m.status === 'pending' && (
+                          <button
+                            onClick={() => handleResend(m.email)}
+                            style={{ background:'transparent', color:GOLD, border:`1px solid ${GOLD}44`, borderRadius:6, padding:'4px 10px', fontSize:11, cursor:'pointer' }}
+                          >
+                            Resend
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleRemove(m.id)}
+                          disabled={removingId === m.id}
+                          style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}
+                        >
+                          {removingId === m.id ? '…' : 'Remove'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
