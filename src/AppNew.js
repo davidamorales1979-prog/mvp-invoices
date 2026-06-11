@@ -31,6 +31,7 @@ const BASE_SERVICE_IDS = ['gas_indoor', 'water', 'water_heater', 'manablok']
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
 function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
+function getLogoUrl(path){ const { data } = supabase.storage.from('logos').getPublicUrl(path); return data.publicUrl }
 
 function calcDocBase(doc) {
   const svcAmt = (doc.services || []).reduce((sum, s) => {
@@ -131,6 +132,7 @@ export default function AppNew(){
   const [sigRequestLoading, setSigRequestLoading] = useState(false)
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
+  const [logoUrl, setLogoUrl] = useState('')
   const joinToken = useMemo(() => new URLSearchParams(window.location.search).get('join'), [])
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
@@ -343,6 +345,7 @@ export default function AppNew(){
     setSubscription(null)
     setAccountId(null)
     setUserRole('admin')
+    setLogoUrl('')
     setAuthMessage('Logged out')
   }
 
@@ -370,7 +373,7 @@ export default function AppNew(){
         setAccountId(resolvedAccountId)
 
         if (data.role === 'member' && data.account_id && data.account_id !== user.id) {
-          // Load admin's profile for company name and contractor names
+          // Load admin's profile for company name, contractor names, and logo
           const { data: adminProfile } = await supabase
             .from('profiles').select('*').eq('user_id', data.account_id).maybeSingle()
           const src = adminProfile || data
@@ -379,12 +382,14 @@ export default function AppNew(){
           setProfileName2(src.name2 || '')
           setProfileName3(src.name3 || '')
           setContractor(src.name1 || src.company_name || 'MVP Solutions')
+          setLogoUrl(src.logo_url ? getLogoUrl(src.logo_url) : '')
         } else {
           setProfileCompany(data.company_name || '')
           setProfileName1(data.name1 || '')
           setProfileName2(data.name2 || '')
           setProfileName3(data.name3 || '')
           setContractor(data.name1 || data.company_name || 'MVP Solutions')
+          setLogoUrl(data.logo_url ? getLogoUrl(data.logo_url) : '')
         }
       } else {
         setProfile(null)
@@ -433,6 +438,28 @@ export default function AppNew(){
       console.error('Error saving profile', e)
       setProfileMessage('Unable to save profile.')
     }
+  }
+
+  async function uploadLogo(file) {
+    if (!user) return { error: 'Not logged in' }
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `${user.id}/logo.${ext}`
+    // Remove old file if it exists (upsert via overwrite)
+    const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true })
+    if (upErr) return { error: upErr.message }
+    const { error: dbErr } = await supabase.from('profiles')
+      .upsert([{ user_id: user.id, logo_url: path }], { onConflict: 'user_id' })
+    if (dbErr) return { error: dbErr.message }
+    setLogoUrl(getLogoUrl(path) + '?t=' + Date.now())
+    return { ok: true }
+  }
+
+  async function removeLogo() {
+    if (!user || !profile?.logo_url) return
+    await supabase.storage.from('logos').remove([profile.logo_url])
+    await supabase.from('profiles').upsert([{ user_id: user.id, logo_url: null }], { onConflict: 'user_id' })
+    setLogoUrl('')
+    setProfile(p => p ? { ...p, logo_url: null } : p)
   }
 
   function applyDocumentData(data){
@@ -1033,7 +1060,7 @@ export default function AppNew(){
         )}
 
         <div className='invoice-header screen-only' style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <img src='/logo.svg' alt='FieldQuote' style={{ height:64, width:'auto' }} />
+          <img src={logoUrl || '/logo.svg'} alt={logoUrl ? profileCompany || 'Logo' : 'FieldQuote'} style={{ height:64, width:'auto', maxWidth:200, objectFit:'contain' }} />
           <div style={{ textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>{docType.toUpperCase()}</div><div style={{ color:GOLD, fontWeight:700 }}>{docNumber}</div></div>
         </div>
 
@@ -1135,6 +1162,9 @@ export default function AppNew(){
               onClose={()=>setShowSettings(false)}
               isAdmin={isAdmin}
               accountId={accountId}
+              logoUrl={logoUrl}
+              onUploadLogo={uploadLogo}
+              onRemoveLogo={removeLogo}
             />
           </div>
         ) : null}
@@ -1451,7 +1481,7 @@ export default function AppNew(){
           <div className='print-document'>
             <div style={{backgroundColor:'#0a1628',padding:'24px 40px',display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0'}}>
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                <img src='/logo.svg' alt='FieldQuote' style={{height:56,width:'auto'}} />
+                <img src={logoUrl || '/logo.svg'} alt={logoUrl ? profileCompany || 'Logo' : 'FieldQuote'} style={{height:56,width:'auto',maxWidth:180,objectFit:'contain'}} />
                 <div style={{color:'#c9a84c',fontSize:'15px',fontWeight:'700',letterSpacing:'1.5px'}}>{contractor}</div>
               </div>
               <div style={{textAlign:'right'}}><div style={{color:'rgba(255,255,255,0.7)',fontSize:'11px',letterSpacing:'3px'}}>{docType==='quote'?'QUOTE':'INVOICE'}</div><div style={{color:'white',fontSize:'28px',fontWeight:'bold'}}>{docNumber}</div></div>
@@ -1753,7 +1783,7 @@ function SignaturePage({ token }) {
     <div style={wrap}>
       {/* Header */}
       <div style={{ background:'#0a1628', padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <img src='/logo.svg' alt='FieldQuote' style={{ height:34 }} />
+        <img src={doc?.logo_url || '/logo.svg'} alt={doc?.logo_url ? doc.contractor || 'Logo' : 'FieldQuote'} style={{ height:34, maxWidth:120, objectFit:'contain' }} />
         <div style={{ color:'#c9a84c', fontWeight:700, fontSize:14 }}>{doc.contractor}</div>
       </div>
 
@@ -2469,13 +2499,37 @@ function JoinPage({ token, user, authLoading }) {
   )
 }
 
-function SettingsPanel({ user, company, name1, name2, name3, subscription, trialDaysLeft, subscribeLoading, billingPortalLoading, onSubscribe, onManageBilling, onSave, onClose, isAdmin, accountId }) {
+function SettingsPanel({ user, company, name1, name2, name3, subscription, trialDaysLeft, subscribeLoading, billingPortalLoading, onSubscribe, onManageBilling, onSave, onClose, isAdmin, accountId, logoUrl, onUploadLogo, onRemoveLogo }) {
   const [co, setCo] = useState(company || '')
   const [n1, setN1] = useState(name1 || '')
   const [n2, setN2] = useState(name2 || '')
   const [n3, setN3] = useState(name3 || '')
   const [msg, setMsg] = useState('')
   const [saving, setSaving] = useState(false)
+  const [logoMsg, setLogoMsg] = useState('')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoRemoving, setLogoRemoving] = useState(false)
+
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setLogoMsg('Please select an image file.'); return }
+    if (file.size > 2 * 1024 * 1024) { setLogoMsg('Image must be under 2 MB.'); return }
+    setLogoUploading(true)
+    setLogoMsg('')
+    const result = await onUploadLogo(file)
+    setLogoUploading(false)
+    setLogoMsg(result.error ? result.error : 'Logo saved.')
+    e.target.value = ''
+  }
+
+  async function handleLogoRemove() {
+    if (!window.confirm('Remove your company logo?')) return
+    setLogoRemoving(true)
+    await onRemoveLogo()
+    setLogoRemoving(false)
+    setLogoMsg('Logo removed.')
+  }
 
   // Team management state
   const [teamMembers, setTeamMembers] = useState([])
@@ -2590,7 +2644,7 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
           ) : null}
 
           {isAdmin && (
-            <div style={{ display:'flex', gap:10 }}>
+            <div style={{ display:'flex', gap:10, marginBottom:20 }}>
               <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
                 {saving ? 'Saving…' : 'Save Changes'}
               </button>
@@ -2599,6 +2653,37 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
               </button>
             </div>
           )}
+
+          {/* Company Logo */}
+          <div style={{ borderTop:'1px solid #1a2d40', paddingTop:18 }}>
+            <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:12 }}>Company Logo</div>
+            {logoUrl ? (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ background:'#0a1628', borderRadius:8, padding:12, display:'inline-flex', alignItems:'center', gap:12 }}>
+                  <img src={logoUrl} alt='Company logo' style={{ height:56, maxWidth:160, objectFit:'contain', borderRadius:4 }} />
+                </div>
+              </div>
+            ) : (
+              <div style={{ color:'#7f98b0', fontSize:13, marginBottom:12 }}>No logo uploaded. The FieldQuote logo will appear on all documents.</div>
+            )}
+            {isAdmin && (
+              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                <label style={{ padding:'8px 16px', borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontWeight:600, fontSize:13, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  {logoUploading ? 'Uploading…' : logoUrl ? 'Change Logo' : 'Upload Logo'}
+                  <input type='file' accept='image/*' onChange={handleLogoUpload} disabled={logoUploading} style={{ display:'none' }} />
+                </label>
+                {logoUrl && (
+                  <button onClick={handleLogoRemove} disabled={logoRemoving} style={{ padding:'8px 14px', borderRadius:6, background:'transparent', color:'#e05252', border:'1px solid #e05252', fontSize:13, cursor:'pointer' }}>
+                    {logoRemoving ? 'Removing…' : 'Remove'}
+                  </button>
+                )}
+              </div>
+            )}
+            {logoMsg && (
+              <div style={{ color: logoMsg === 'Logo saved.' ? '#4caf50' : logoMsg === 'Logo removed.' ? '#9fb0c6' : '#e05252', fontSize:13, marginTop:8 }}>{logoMsg}</div>
+            )}
+            <div style={{ color:'#7f98b0', fontSize:11, marginTop:8 }}>PNG, JPG, or SVG · max 2 MB · Recommended: transparent background, landscape orientation</div>
+          </div>
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:20 }}>

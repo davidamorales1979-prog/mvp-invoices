@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from('documents')
-      .select('doc_number, doc_type, client, address, contractor, total, created_at, signed_at, signer_name, signature_data')
+      .select('doc_number, doc_type, client, address, contractor, total, created_at, signed_at, signer_name, signature_data, user_id')
       .eq('signature_token', token)
       .maybeSingle()
 
@@ -36,7 +36,19 @@ Deno.serve(async (req) => {
       })
     }
 
-    return new Response(JSON.stringify(data), {
+    // Fetch account owner's logo
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('logo_url')
+      .eq('user_id', data.user_id)
+      .maybeSingle()
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const logoPublicUrl = profile?.logo_url
+      ? `${supabaseUrl}/storage/v1/object/public/logos/${profile.logo_url}`
+      : null
+
+    return new Response(JSON.stringify({ ...data, logo_url: logoPublicUrl }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
