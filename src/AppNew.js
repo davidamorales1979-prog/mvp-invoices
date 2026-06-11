@@ -129,6 +129,9 @@ export default function AppNew(){
   const [signerName, setSignerName] = useState('')
   const [showSigModal, setShowSigModal] = useState(false)
   const [sigRequestLoading, setSigRequestLoading] = useState(false)
+  const [accountId, setAccountId] = useState(null)
+  const [userRole, setUserRole] = useState('admin')
+  const joinToken = useMemo(() => new URLSearchParams(window.location.search).get('join'), [])
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -188,13 +191,14 @@ export default function AppNew(){
   const trialDaysLeft = subscription?.status === 'trialing' && subscription.trial_end
     ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
     : 0
+  const isAdmin = userRole === 'admin'
 
   const fetchSavedDocs = useCallback(async () => {
-    if (!user) return
+    if (!user || !accountId) return
     const { data, error } = await supabase
       .from('documents')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', accountId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -202,19 +206,19 @@ export default function AppNew(){
       return
     }
     setSavedDocs(data || [])
-  }, [user])
+  }, [user, accountId])
 
   const fetchScheduledDocs = useCallback(async () => {
-    if (!user) return
+    if (!user || !accountId) return
     const { data, error } = await supabase
       .from('documents')
       .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
-      .eq('user_id', user.id)
+      .eq('user_id', accountId)
       .not('scheduled_date', 'is', null)
       .order('scheduled_date', { ascending: true })
     if (error) { console.error('Supabase fetch scheduled docs error:', error); return }
     setAllScheduledDocs(data || [])
-  }, [user])
+  }, [user, accountId])
 
   const paymentAlerts = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
@@ -252,9 +256,9 @@ export default function AppNew(){
   const markPhasePaid = useCallback(async (doc, phaseKey) => {
     const entry = { ts: new Date().toISOString(), entry: `phase:${phaseKey}:paid`, status: doc.status, docNumber: doc.doc_number }
     const newHistory = [entry, ...(doc.history || [])]
-    const { error } = await supabase.from('documents').update({ history: newHistory }).eq('id', doc.id).eq('user_id', user?.id)
+    const { error } = await supabase.from('documents').update({ history: newHistory }).eq('id', doc.id).eq('user_id', accountId || user?.id)
     if (!error) fetchSavedDocs()
-  }, [user, fetchSavedDocs])
+  }, [user, accountId, fetchSavedDocs])
 
   async function startCheckout(){
     setCheckoutLoading(true)
@@ -337,6 +341,8 @@ export default function AppNew(){
     setProfile(null)
     setProfileChecked(false)
     setSubscription(null)
+    setAccountId(null)
+    setUserRole('admin')
     setAuthMessage('Logged out')
   }
 
@@ -359,13 +365,31 @@ export default function AppNew(){
       }
       if (data) {
         setProfile(data)
-        setProfileCompany(data.company_name || '')
-        setProfileName1(data.name1 || '')
-        setProfileName2(data.name2 || '')
-        setProfileName3(data.name3 || '')
-        setContractor(data.name1 || data.company_name || 'MVP Solutions')
+        setUserRole(data.role || 'admin')
+        const resolvedAccountId = data.account_id || user.id
+        setAccountId(resolvedAccountId)
+
+        if (data.role === 'member' && data.account_id && data.account_id !== user.id) {
+          // Load admin's profile for company name and contractor names
+          const { data: adminProfile } = await supabase
+            .from('profiles').select('*').eq('user_id', data.account_id).maybeSingle()
+          const src = adminProfile || data
+          setProfileCompany(src.company_name || '')
+          setProfileName1(src.name1 || '')
+          setProfileName2(src.name2 || '')
+          setProfileName3(src.name3 || '')
+          setContractor(src.name1 || src.company_name || 'MVP Solutions')
+        } else {
+          setProfileCompany(data.company_name || '')
+          setProfileName1(data.name1 || '')
+          setProfileName2(data.name2 || '')
+          setProfileName3(data.name3 || '')
+          setContractor(data.name1 || data.company_name || 'MVP Solutions')
+        }
       } else {
         setProfile(null)
+        setAccountId(user.id)
+        setUserRole('admin')
       }
     } catch (e) {
       console.error('Error loading profile', e)
@@ -455,8 +479,9 @@ export default function AppNew(){
 
   async function deleteDocument(id){
     if (!id) return
+    if (!isAdmin) { setSaveMessage('Only admins can delete documents'); return }
     if (!window.confirm('Delete this document?')) return
-    const { error } = await supabase.from('documents').delete().eq('id', id).eq('user_id', user?.id)
+    const { error } = await supabase.from('documents').delete().eq('id', id).eq('user_id', accountId || user?.id)
     if (error) {
       console.error('Supabase delete error:', error)
       setSaveMessage('Delete failed')
@@ -506,19 +531,19 @@ export default function AppNew(){
 
   useEffect(() => {
     if (!user) { setSubscription(null); setSubLoading(false); return }
+    if (!accountId) return  // wait for profile/accountId to be resolved
     let cancelled = false
     setSubLoading(true)
     ;(async () => {
       try {
-        const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
+        const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', accountId).single()
         let sub = data
-        // PGRST116 = no rows returned — create a trial record
-        // Any other error (e.g. table doesn't exist) — leave sub as null and allow access
-        if (!sub && error?.code === 'PGRST116') {
+        // PGRST116 = no rows — create a trial only for account owners (not members)
+        if (!sub && error?.code === 'PGRST116' && accountId === user.id) {
           const trialEnd = new Date()
           trialEnd.setDate(trialEnd.getDate() + 30)
           const ins = await supabase.from('subscriptions')
-            .insert({ user_id: user.id, status: 'trialing', trial_end: trialEnd.toISOString() })
+            .insert({ user_id: accountId, status: 'trialing', trial_end: trialEnd.toISOString() })
             .select().single()
           sub = ins?.data ?? null
         }
@@ -530,7 +555,7 @@ export default function AppNew(){
       }
     })()
     return () => { cancelled = true }
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user) return
@@ -558,27 +583,27 @@ export default function AppNew(){
   }, [showSchedule, fetchScheduledDocs])
 
   useEffect(() => {
-    if (!user || !client.trim()) { setClientPhotos([]); return }
+    if (!user || !accountId || !client.trim()) { setClientPhotos([]); return }
     let cancelled = false
     const t = setTimeout(async () => {
       setPhotosLoading(true)
       try {
-        const { data } = await supabase.from('photos').select('*').eq('user_id', user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
+        const { data } = await supabase.from('photos').select('*').eq('user_id', accountId || user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
         if (!cancelled) setClientPhotos(data || [])
       } catch(e){ console.error('Load photos error', e) }
       finally { if (!cancelled) setPhotosLoading(false) }
     }, 400)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [client, user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [client, user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function getMaxRawCounter(){
-      if (!user) return null
+      if (!user || !accountId) return null
       try{
         const { data, error } = await supabase
           .from('documents')
           .select('raw_counter')
-          .eq('user_id', user.id)
+          .eq('user_id', accountId)
           .order('raw_counter', { ascending: false })
           .limit(1)
 
@@ -595,11 +620,11 @@ export default function AppNew(){
     }
 
     async function loadLastDocument() {
-      if (!user) return
+      if (!user || !accountId) return
       const { data, error } = await supabase
         .from('documents')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', accountId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -644,14 +669,14 @@ export default function AppNew(){
     }
 
     async function init() {
-      if (!user) return
+      if (!user || !accountId) return
       const max = await getMaxRawCounter()
       const start = (max != null && typeof max === 'number') ? (max + 1) : 1
       try { reset(start) } catch (e) { /* ignore */ }
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
     init()
-  }, [reset, fetchSavedDocs, user])
+  }, [reset, fetchSavedDocs, user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
@@ -681,7 +706,7 @@ export default function AppNew(){
       history,
       status,
       total: displayTotal,
-      user_id: user.id,
+      user_id: accountId || user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
       scheduled_date: scheduleDate || null,
@@ -694,7 +719,7 @@ export default function AppNew(){
 
     try {
       if (savedDocId) {
-        const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', user.id)
+        const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', accountId || user.id)
         if (error) {
           console.error('Supabase update error:', error)
           setSaveMessage(`Save failed: ${error.message}`)
@@ -749,7 +774,7 @@ export default function AppNew(){
         .order('raw_counter', { ascending: false })
         .limit(1)
 
-      const { data, error } = user ? await query.eq('user_id', user.id) : await query
+      const { data, error } = user ? await query.eq('user_id', accountId || user.id) : await query
 
       let next
       if (!error && Array.isArray(data) && data.length > 0 && data[0].raw_counter != null) {
@@ -816,9 +841,9 @@ export default function AppNew(){
       const path = `${user.id}/${slug}/${Date.now()}-${safeName}`
       const { error: upErr } = await supabase.storage.from('job-photos').upload(path, file)
       if (upErr) { setPhotoMessage(upErr.message); return }
-      const { error: dbErr } = await supabase.from('photos').insert([{ user_id: user.id, client_name: client.trim(), file_path: path, storage_path: path, file_name: file.name }])
+      const { error: dbErr } = await supabase.from('photos').insert([{ user_id: accountId || user.id, client_name: client.trim(), file_path: path, storage_path: path, file_name: file.name }])
       if (dbErr) { setPhotoMessage(dbErr.message); return }
-      const { data } = await supabase.from('photos').select('*').eq('user_id', user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
+      const { data } = await supabase.from('photos').select('*').eq('user_id', accountId || user.id).eq('client_name', client.trim()).order('created_at', { ascending: true })
       setClientPhotos(data || [])
       setPhotoMessage('Uploaded!')
       setTimeout(() => setPhotoMessage(''), 2000)
@@ -866,6 +891,7 @@ export default function AppNew(){
   }
 
   if (signToken) return <SignaturePage token={signToken} />
+  if (joinToken) return <JoinPage token={joinToken} user={user} authLoading={authLoading} />
 
   if (authLoading || (user && !profileChecked)) {
     return (
@@ -1107,6 +1133,8 @@ export default function AppNew(){
                 return null
               }}
               onClose={()=>setShowSettings(false)}
+              isAdmin={isAdmin}
+              accountId={accountId}
             />
           </div>
         ) : null}
@@ -1377,7 +1405,7 @@ export default function AppNew(){
                     <td style={{ padding:'10px', color:'#7f98b0' }}>{doc.created_at ? new Date(doc.created_at).toLocaleString() : '—'}</td>
                     <td style={{ padding:'10px', display:'flex', gap:8 }}>
                       <button type='button' onClick={() => openDocument(doc)} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Open</button>
-                      <button type='button' onClick={() => deleteDocument(doc.id)} style={{ background:'#7a0a0a', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Delete</button>
+                      {isAdmin && <button type='button' onClick={() => deleteDocument(doc.id)} style={{ background:'#7a0a0a', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 10px', borderRadius:6 }}>Delete</button>}
                     </td>
                   </tr>
                 ))}
@@ -2280,13 +2308,165 @@ function ScheduleCalendar({ docs, onClose }) {
   )
 }
 
-function SettingsPanel({ user, company, name1, name2, name3, subscription, trialDaysLeft, subscribeLoading, billingPortalLoading, onSubscribe, onManageBilling, onSave, onClose }) {
+function JoinPage({ token, user, authLoading }) {
+  const [info, setInfo] = useState(null)
+  const [infoLoading, setInfoLoading] = useState(true)
+  const [infoError, setInfoError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authMsg, setAuthMsg] = useState('')
+  const [accepting, setAccepting] = useState(false)
+  const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    supabase.functions.invoke('get-invite-info', { body: { token } })
+      .then(({ data, error }) => {
+        if (error || data?.error) { setInfoError((data?.error) || error.message); return }
+        setInfo(data)
+      })
+      .finally(() => setInfoLoading(false))
+  }, [token])
+
+  async function handleAuth(isSignUp) {
+    setAuthMsg('')
+    const fn = isSignUp
+      ? supabase.auth.signUp({ email, password })
+      : supabase.auth.signInWithPassword({ email, password })
+    const { error } = await fn
+    if (error) { setAuthMsg(error.message); return }
+    if (isSignUp) setAuthMsg('Check your email to confirm, then sign in below.')
+  }
+
+  async function handleAccept() {
+    if (!user) { setAuthMsg('Please sign in first.'); return }
+    setAccepting(true)
+    const { data, error } = await supabase.functions.invoke('accept-team-invite', { body: { token } })
+    setAccepting(false)
+    if (error || data?.error) { setAuthMsg((data?.error) || error.message); return }
+    setDone(true)
+  }
+
+  const wrapStyle = { minHeight:'100vh', background:NAVY, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }
+  const cardStyle = { background:'#041827', borderRadius:12, padding:32, maxWidth:420, width:'100%' }
+
+  if (infoLoading) return <div style={wrapStyle}><div style={cardStyle}><div style={{ color:'#9fb0c6' }}>Loading invite…</div></div></div>
+  if (infoError) return <div style={wrapStyle}><div style={cardStyle}><div style={{ color:'#e05252', marginBottom:8 }}>Invite not found or expired.</div><div style={{ color:'#7f98b0', fontSize:13 }}>{infoError}</div></div></div>
+
+  if (done) {
+    return (
+      <div style={wrapStyle}>
+        <div style={cardStyle}>
+          <div style={{ color:GOLD, fontWeight:700, fontSize:20, marginBottom:12 }}>You're in!</div>
+          <div style={{ color:'#9fb0c6', marginBottom:20 }}>You've joined <strong style={{ color:'#fff' }}>{info.company}</strong> as a team member.</div>
+          <button onClick={() => window.location.href = '/'} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+            Open FieldQuote
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (info.status === 'active') {
+    return (
+      <div style={wrapStyle}>
+        <div style={cardStyle}>
+          <div style={{ color:GOLD, fontWeight:700, fontSize:18, marginBottom:10 }}>Invite Already Used</div>
+          <div style={{ color:'#9fb0c6' }}>This invite has already been accepted. <a href='/' style={{ color:GOLD }}>Go to FieldQuote</a></div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={wrapStyle}>
+      <div style={cardStyle}>
+        <div style={{ color:GOLD, fontWeight:700, fontSize:20, marginBottom:6 }}>Team Invite</div>
+        <div style={{ color:'#9fb0c6', marginBottom:20, fontSize:14 }}>
+          You've been invited to join <strong style={{ color:'#fff' }}>{info.company}</strong> on FieldQuote.
+        </div>
+
+        {authLoading ? (
+          <div style={{ color:'#9fb0c6', fontSize:13 }}>Loading…</div>
+        ) : user ? (
+          <div>
+            <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:14 }}>
+              Signed in as <strong style={{ color:'#fff' }}>{user.email}</strong>
+            </div>
+            {authMsg && <div style={{ color:'#e05252', fontSize:13, marginBottom:10 }}>{authMsg}</div>}
+            <button onClick={handleAccept} disabled={accepting} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+              {accepting ? 'Accepting…' : `Accept Invite & Join ${info.company}`}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:14 }}>Sign in or create an account to accept this invite.</div>
+            <div style={{ marginBottom:12 }}>
+              <input value={email} onChange={e=>setEmail(e.target.value)} placeholder='Email' type='email' style={{ width:'100%', padding:'9px 12px', borderRadius:6, border:'1px solid #223', background:'#0a1e32', color:'#fff', boxSizing:'border-box', fontSize:14, marginBottom:8 }} />
+              <input value={password} onChange={e=>setPassword(e.target.value)} placeholder='Password' type='password' style={{ width:'100%', padding:'9px 12px', borderRadius:6, border:'1px solid #223', background:'#0a1e32', color:'#fff', boxSizing:'border-box', fontSize:14 }} />
+            </div>
+            {authMsg && <div style={{ color: authMsg.startsWith('Check') ? '#4caf50' : '#e05252', fontSize:13, marginBottom:10 }}>{authMsg}</div>}
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={()=>handleAuth(false)} style={{ flex:1, padding:'10px 0', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>Sign In</button>
+              <button onClick={()=>handleAuth(true)} style={{ flex:1, padding:'10px 0', borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SettingsPanel({ user, company, name1, name2, name3, subscription, trialDaysLeft, subscribeLoading, billingPortalLoading, onSubscribe, onManageBilling, onSave, onClose, isAdmin, accountId }) {
   const [co, setCo] = useState(company || '')
   const [n1, setN1] = useState(name1 || '')
   const [n2, setN2] = useState(name2 || '')
   const [n3, setN3] = useState(name3 || '')
   const [msg, setMsg] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // Team management state
+  const [teamMembers, setTeamMembers] = useState([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteMsg, setInviteMsg] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
+  const [removingId, setRemovingId] = useState(null)
+
+  useEffect(() => {
+    if (!isAdmin || !accountId) return
+    setTeamLoading(true)
+    supabase.from('team_members').select('*').eq('account_id', accountId).order('invited_at', { ascending: false })
+      .then(({ data }) => { setTeamMembers(data || []) })
+      .finally(() => setTeamLoading(false))
+  }, [isAdmin, accountId])
+
+  async function handleInvite() {
+    if (!inviteEmail.trim()) { setInviteMsg('Enter an email address.'); return }
+    setInviting(true)
+    setInviteMsg('')
+    setInviteLink('')
+    const { data, error } = await supabase.from('team_members')
+      .insert([{ account_id: accountId, email: inviteEmail.trim().toLowerCase(), role: 'member', status: 'pending' }])
+      .select('invite_token').single()
+    setInviting(false)
+    if (error) { setInviteMsg(error.message); return }
+    const link = `${window.location.origin}/?join=${data.invite_token}`
+    setInviteLink(link)
+    setInviteEmail('')
+    setInviteMsg('Invite created. Share this link:')
+    const { data: members } = await supabase.from('team_members').select('*').eq('account_id', accountId).order('invited_at', { ascending: false })
+    setTeamMembers(members || [])
+  }
+
+  async function handleRemove(memberId) {
+    if (!window.confirm('Remove this team member?')) return
+    setRemovingId(memberId)
+    const { error } = await supabase.functions.invoke('remove-team-member', { body: { memberId } })
+    setRemovingId(null)
+    if (error) { setInviteMsg('Failed to remove: ' + error.message); return }
+    setTeamMembers(prev => prev.filter(m => m.id !== memberId))
+  }
 
   async function handleSave() {
     if (!co.trim() || !n1.trim()) { setMsg('Company name and at least one contractor name are required.'); return }
@@ -2325,9 +2505,15 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
         <div>
           <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Company Profile</div>
 
+          {!isAdmin && (
+            <div style={{ background:'#0a1e32', borderRadius:6, padding:'10px 14px', marginBottom:14, color:'#9fb0c6', fontSize:13 }}>
+              You are a team member. Profile settings are managed by the account admin.
+            </div>
+          )}
+
           <div style={{ marginBottom:14 }}>
             <label style={labelStyle}>Company Name *</label>
-            <input value={co} onChange={e=>setCo(e.target.value)} placeholder='Your company name' style={fieldStyle} />
+            <input value={co} onChange={e=>setCo(e.target.value)} placeholder='Your company name' style={fieldStyle} disabled={!isAdmin} />
           </div>
 
           {[
@@ -2338,8 +2524,8 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
             <div key={label} style={{ marginBottom:14 }}>
               <label style={labelStyle}>{label}{!required && <span style={{ color:'#7f98b0', fontWeight:400 }}> (optional)</span>}</label>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <input value={val} onChange={e=>set(e.target.value)} placeholder='e.g. John Smith' style={{ ...fieldStyle, flex:1 }} />
-                {!required && val ? (
+                <input value={val} onChange={e=>set(e.target.value)} placeholder='e.g. John Smith' style={{ ...fieldStyle, flex:1 }} disabled={!isAdmin} />
+                {!required && val && isAdmin ? (
                   <button onClick={()=>set('')} title='Remove' style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'7px 10px', cursor:'pointer', fontSize:14, lineHeight:1 }}>✕</button>
                 ) : null}
               </div>
@@ -2350,79 +2536,143 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
             <div style={{ color: msg === 'Settings saved.' ? '#4caf50' : GOLD, marginBottom:12, fontSize:13 }}>{msg}</div>
           ) : null}
 
-          <div style={{ display:'flex', gap:10 }}>
-            <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
-              {saving ? 'Saving…' : 'Save Changes'}
-            </button>
-            <button onClick={onClose} style={{ padding:'10px 16px', borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
-              Cancel
-            </button>
-          </div>
+          {isAdmin && (
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={handleSave} disabled={saving} style={{ padding:'10px 24px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer' }}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button onClick={onClose} style={{ padding:'10px 16px', borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Billing section */}
-        <div style={{ background:'#071827', borderRadius:8, padding:18 }}>
-          <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Billing</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
 
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-            <span style={{ background:statusBadge.bg, color:statusBadge.color, border:`1px solid ${statusBadge.color}44`, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700 }}>
-              {statusBadge.label}
-            </span>
-            {isTrialing && trialDaysLeft > 0 && (
-              <span style={{ color:'#9fb0c6', fontSize:13 }}>{trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining</span>
-            )}
-            {isTrialing && trialDaysLeft === 0 && (
-              <span style={{ color:'#e87040', fontSize:13 }}>Trial expired</span>
-            )}
-          </div>
+          {/* Billing section — admin only */}
+          {isAdmin && (
+            <div style={{ background:'#071827', borderRadius:8, padding:18 }}>
+              <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Billing</div>
 
-          <div style={{ background:'#0a1628', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
-            <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Plan</div>
-            <div style={{ color:'#fff', fontWeight:700, fontSize:16 }}>FieldQuote</div>
-            <div style={{ color:GOLD, fontSize:22, fontWeight:700, marginTop:4 }}>$29<span style={{ fontSize:13, color:'#7f98b0', fontWeight:400 }}>/month</span></div>
-            <div style={{ color:'#7f98b0', fontSize:12, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
-          </div>
-
-          {isTrialing && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10, lineHeight:1.5 }}>
-                {trialDaysLeft > 0
-                  ? `Your free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}. Subscribe now to keep your access without interruption.`
-                  : 'Your free trial has ended. Subscribe to continue using FieldQuote.'}
+              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+                <span style={{ background:statusBadge.bg, color:statusBadge.color, border:`1px solid ${statusBadge.color}44`, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700 }}>
+                  {statusBadge.label}
+                </span>
+                {isTrialing && trialDaysLeft > 0 && (
+                  <span style={{ color:'#9fb0c6', fontSize:13 }}>{trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} remaining</span>
+                )}
+                {isTrialing && trialDaysLeft === 0 && (
+                  <span style={{ color:'#e87040', fontSize:13 }}>Trial expired</span>
+                )}
               </div>
-              <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
-                {subscribeLoading ? 'Redirecting to Stripe…' : 'Subscribe — $29/month'}
-              </button>
+
+              <div style={{ background:'#0a1628', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
+                <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Plan</div>
+                <div style={{ color:'#fff', fontWeight:700, fontSize:16 }}>FieldQuote</div>
+                <div style={{ color:GOLD, fontSize:22, fontWeight:700, marginTop:4 }}>$29<span style={{ fontSize:13, color:'#7f98b0', fontWeight:400 }}>/month</span></div>
+                <div style={{ color:'#7f98b0', fontSize:12, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
+              </div>
+
+              {isTrialing && (
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10, lineHeight:1.5 }}>
+                    {trialDaysLeft > 0
+                      ? `Your free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}. Subscribe now to keep your access without interruption.`
+                      : 'Your free trial has ended. Subscribe to continue using FieldQuote.'}
+                  </div>
+                  <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                    {subscribeLoading ? 'Redirecting to Stripe…' : 'Subscribe — $29/month'}
+                  </button>
+                </div>
+              )}
+
+              {(isPastDue || isCanceled || (!subscription)) && (
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
+                    {isPastDue   ? 'Your last payment failed. Update your payment method to restore access.'
+                     : isCanceled ? 'Your subscription was canceled. Resubscribe to continue.'
+                     :              'No active subscription found.'}
+                  </div>
+                  <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                    {subscribeLoading ? 'Redirecting to Stripe…' : isPastDue ? 'Update Payment Method' : 'Subscribe — $29/month'}
+                  </button>
+                </div>
+              )}
+
+              {isActive && (
+                <div>
+                  <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
+                    Your subscription is active. Use the billing portal to update payment info, download invoices, or cancel.
+                  </div>
+                  <button onClick={onManageBilling} disabled={billingPortalLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                    {billingPortalLoading ? 'Opening portal…' : 'Manage Billing'}
+                  </button>
+                </div>
+              )}
+
+              <div style={{ marginTop:14, color:'#7f98b0', fontSize:11 }}>
+                Payments are processed securely by Stripe. FieldQuote does not store your card details.
+              </div>
             </div>
           )}
 
-          {(isPastDue || isCanceled || (!subscription)) && (
-            <div style={{ marginBottom:14 }}>
-              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
-                {isPastDue   ? 'Your last payment failed. Update your payment method to restore access.'
-                 : isCanceled ? 'Your subscription was canceled. Resubscribe to continue.'
-                 :              'No active subscription found.'}
+          {/* Team section — admin only */}
+          {isAdmin && (
+            <div style={{ background:'#071827', borderRadius:8, padding:18 }}>
+              <div style={{ color:GOLD, fontWeight:700, fontSize:13, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14 }}>Team</div>
+
+              <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+                <input
+                  value={inviteEmail}
+                  onChange={e=>setInviteEmail(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter') handleInvite() }}
+                  placeholder='team@example.com'
+                  style={{ flex:1, padding:'9px 12px', borderRadius:6, border:'1px solid #223', background:'#0a1e32', color:'#fff', fontSize:14 }}
+                />
+                <button onClick={handleInvite} disabled={inviting} style={{ padding:'9px 16px', borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  {inviting ? '…' : 'Invite'}
+                </button>
               </div>
-              <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
-                {subscribeLoading ? 'Redirecting to Stripe…' : isPastDue ? 'Update Payment Method' : 'Subscribe — $29/month'}
-              </button>
+
+              {inviteMsg && (
+                <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:8 }}>{inviteMsg}</div>
+              )}
+              {inviteLink && (
+                <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+                  <input readOnly value={inviteLink} style={{ flex:1, padding:'7px 10px', borderRadius:6, border:'1px solid #334', background:'#0a1628', color:'#c9d8e8', fontSize:12 }} onClick={e=>e.target.select()} />
+                  <button onClick={()=>navigator.clipboard.writeText(inviteLink)} style={{ padding:'7px 12px', borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontSize:12, cursor:'pointer' }}>Copy</button>
+                </div>
+              )}
+
+              {teamLoading ? (
+                <div style={{ color:'#7f98b0', fontSize:13 }}>Loading…</div>
+              ) : teamMembers.length === 0 ? (
+                <div style={{ color:'#7f98b0', fontSize:13 }}>No team members yet. Invite someone above.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {teamMembers.map(m => (
+                    <div key={m.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'#0a1628', borderRadius:6, padding:'8px 12px' }}>
+                      <div>
+                        <div style={{ color:'#fff', fontSize:13, fontWeight:600 }}>{m.email}</div>
+                        <div style={{ color: m.status === 'active' ? '#4caf50' : '#7f98b0', fontSize:11, marginTop:2 }}>
+                          {m.status === 'active' ? 'Active' : 'Pending invite'}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemove(m.id)}
+                        disabled={removingId === m.id}
+                        style={{ background:'transparent', color:'#e05252', border:'1px solid #e05252', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer' }}
+                      >
+                        {removingId === m.id ? '…' : 'Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {isActive && (
-            <div>
-              <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:10 }}>
-                Your subscription is active. Use the billing portal to update payment info, download invoices, or cancel.
-              </div>
-              <button onClick={onManageBilling} disabled={billingPortalLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, fontWeight:700, fontSize:14, cursor:'pointer' }}>
-                {billingPortalLoading ? 'Opening portal…' : 'Manage Billing'}
-              </button>
-            </div>
-          )}
-
-          <div style={{ marginTop:14, color:'#7f98b0', fontSize:11 }}>
-            Payments are processed securely by Stripe. FieldQuote does not store your card details.
-          </div>
         </div>
 
       </div>
