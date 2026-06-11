@@ -121,6 +121,7 @@ export default function AppNew(){
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [billingPortalLoading, setBillingPortalLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -935,7 +936,7 @@ export default function AppNew(){
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
 
         {subscription?.status === 'trialing' && (
-          <div className='no-print' style={{ margin:'-18px -18px 18px -18px', padding:'10px 20px', background: trialDaysLeft <= 7 ? '#2a0e00' : '#0f1e0a', borderBottom:`2px solid ${trialDaysLeft <= 7 ? '#e87040' : GOLD}`, borderRadius:'8px 8px 0 0', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+          <div className='no-print trial-banner' style={{ margin:'-18px -18px 18px -18px', padding:'10px 20px', background: trialDaysLeft <= 7 ? '#2a0e00' : '#0f1e0a', borderBottom:`2px solid ${trialDaysLeft <= 7 ? '#e87040' : GOLD}`, borderRadius:'8px 8px 0 0', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:18, lineHeight:1 }}>{trialDaysLeft <= 7 ? '⚠' : '🕐'}</span>
               <div>
@@ -947,7 +948,7 @@ export default function AppNew(){
                 </span>
               </div>
             </div>
-            <button onClick={startCheckout} disabled={checkoutLoading} style={{ background:GOLD, color:NAVY, border:'none', padding:'7px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap', flexShrink:0 }}>
+            <button onClick={startCheckout} disabled={checkoutLoading} className='trial-subscribe-btn' style={{ background:GOLD, color:NAVY, border:'none', padding:'7px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap', flexShrink:0 }}>
               {checkoutLoading ? 'Redirecting…' : 'Subscribe — $29/mo'}
             </button>
           </div>
@@ -959,11 +960,17 @@ export default function AppNew(){
         </div>
 
         <div className='screen-only'>
-          <div className='no-print' style={{ marginTop:12, display:'flex', gap:8, alignItems:'center' }}>
+          <div className='no-print' style={{ marginTop:12, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
           {contractorNames.map(name => (
             <button key={name} onClick={()=>setContractor(name)} style={{ padding:8, borderRadius:6, background: contractor===name ? GOLD : '#0f2740', color: contractor===name ? NAVY : '#fff' }}>{name}</button>
           ))}
-          <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+          {/* Hamburger — only visible on mobile via CSS */}
+          <button className='mobile-menu-btn' onClick={()=>setMenuOpen(m=>!m)}
+            style={{ marginLeft:'auto', background: menuOpen ? GOLD : '#0f2740', color: menuOpen ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:'8px 12px', borderRadius:6, fontSize:18, lineHeight:1, flexShrink:0, cursor:'pointer' }}>
+            {menuOpen ? '✕' : '☰'}
+          </button>
+          {/* Nav buttons — hidden on mobile, shown as column when menuOpen */}
+          <div className={`toolbar-nav${menuOpen ? ' toolbar-nav-open' : ''}`} style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
@@ -977,9 +984,9 @@ export default function AppNew(){
             <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
             <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
+            <span className='toolbar-email' style={{ color:'#9fb0c6' }}>{user?.email}</span>
           </div>
-          <div style={{ marginLeft:'auto', color:'#9fb0c6' }}>{user?.email}</div>
-          {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700 }}>{saveMessage}</div> : null}
+          {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700, width:'100%' }}>{saveMessage}</div> : null}
         </div>
 
         {showSettings ? (
@@ -1040,7 +1047,7 @@ export default function AppNew(){
         })()}
 
 
-        <div style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+        <div className='form-grid-3' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
           <div>
             <label style={{ color:'#9fb0c6' }}>Client</label>
             <input value={client} onChange={e=>setClient(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
@@ -1086,7 +1093,7 @@ export default function AppNew(){
         </section>
 
         <section className={!showFixturesPrint ? 'no-print' : undefined} style={{ marginTop:14, background:'#041827', padding:12, borderRadius:8 }}>
-          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <div className='fixtures-row' style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
             <div><label style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</label><input type='number' value={houses} onChange={e=>setHouses(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
             <div><label style={{ color:'#9fb0c6' }}>Property Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Multi-family</option><option>Commercial</option><option>Industrial</option></select></div>
             <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option></select></div>
@@ -1094,7 +1101,7 @@ export default function AppNew(){
             <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
             <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
           </div>
-          <div style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
+          <div className='phase-boxes' style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
             {projectType === 'New Construction' ? (
               <>
                 {phasePctSum !== 100 && (
@@ -1188,7 +1195,7 @@ export default function AppNew(){
           </div>
         </section>
 
-        <section style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 320px', gap:12, alignItems:'start' }}>
+        <section className='form-grid-sidebar' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 320px', gap:12, alignItems:'start' }}>
           <div>
             <div className='no-print' style={{ display:'flex', gap:8, alignItems:'center' }}>
               <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
@@ -2029,7 +2036,7 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
         <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, alignItems:'start' }}>
+      <div className='settings-grid' style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, alignItems:'start' }}>
 
         {/* Profile section */}
         <div>

@@ -40,6 +40,86 @@
 .screen-only { display: block; }
 .print-only { display: none; }
 
+/* ====== MOBILE NAVIGATION ====== */
+.mobile-menu-btn { display: none; }
+
+/* ====== MOBILE BREAKPOINT (≤ 600px) ====== */
+@media (max-width: 600px) {
+  /* Reduce outer padding so content fills the screen */
+  .invoice-root { padding: 8px !important; }
+  .invoice-shell { padding: 10px !important; border-radius: 4px !important; }
+
+  /* Header logo */
+  .invoice-header img { height: 44px !important; }
+
+  /* Trial banner: pull to correct edge and stack vertically */
+  .trial-banner {
+    margin: -10px -10px 10px -10px !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    border-radius: 4px 4px 0 0 !important;
+  }
+  .trial-subscribe-btn { width: 100% !important; text-align: center; }
+
+  /* Show hamburger, hide desktop nav row */
+  .mobile-menu-btn { display: block !important; }
+  .toolbar-nav { display: none !important; margin-left: 0 !important; }
+
+  /* Open state: full-width column menu */
+  .toolbar-nav.toolbar-nav-open {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    margin: 6px 0 0 !important;
+    background: #0a1e32;
+    border-radius: 8px;
+    padding: 8px;
+    gap: 4px !important;
+    align-items: stretch !important;
+    box-sizing: border-box;
+  }
+  .toolbar-nav.toolbar-nav-open > button,
+  .toolbar-nav.toolbar-nav-open > label {
+    width: 100% !important;
+    padding: 12px 14px !important;
+    text-align: left;
+    font-size: 15px !important;
+    box-sizing: border-box;
+    border-radius: 6px !important;
+  }
+  .toolbar-nav.toolbar-nav-open .toolbar-email {
+    display: block;
+    padding: 10px 14px;
+    color: #7f98b0;
+    font-size: 12px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin-top: 4px;
+  }
+
+  /* 3-column form grid → single column */
+  .form-grid-3 { grid-template-columns: 1fr !important; }
+
+  /* Notes + totals sidebar → stacked */
+  .form-grid-sidebar { grid-template-columns: 1fr !important; }
+
+  /* Settings panel 2-column grid → stacked */
+  .settings-grid { grid-template-columns: 1fr !important; }
+
+  /* Fixtures row: wrap inputs vertically */
+  .fixtures-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .fixtures-row > div { width: 100%; min-width: 0 !important; }
+  .fixtures-row input[type='number'],
+  .fixtures-row select { width: 100% !important; box-sizing: border-box; margin-left: 0 !important; }
+
+  /* Phase boxes: stack vertically */
+  .phase-boxes { flex-direction: column !important; }
+  .phase-boxes > div { min-width: 0 !important; width: 100% !important; }
+}
+
 /* Print rules: hide controls and make document print-friendly */
 @media print {
   @page { margin: 10mm; }
