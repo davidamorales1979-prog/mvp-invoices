@@ -24,10 +24,24 @@ const SERVICES = [
   { id: 'repiping', name: 'Repiping', unit: 1500 },
   { id: 'gas_indoor', name: 'Gas System Indoor', unit: 300 },
   { id: 'grease', name: 'Grease Trap', unit: 450 },
-  { id: 'cut_bust', name: 'Cut and Bust Concrete', unit: 200 }
+  { id: 'cut_bust', name: 'Cut and Bust Concrete', unit: 200 },
+  { id: 'water_tap', name: 'Water Meter Tap', unit: 0, desc: '' },
+  { id: 'sewer_tap', name: 'Sewer Tap', unit: 0, desc: '' },
+  { id: 'wh_replacement', name: 'Water Heater Replacement', unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'manablok']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'manablok', 'gas_indoor']
+
+function mergeServices(saved) {
+  const map = new Map((saved || []).map(s => [s.id, s]))
+  return SERVICES.map(s => ({
+    ...s,
+    enabled: false,
+    qty: 0,
+    ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}),
+    ...(map.get(s.id) || {}),
+  }))
+}
 
 function formatCurrency(n){ return '$' + Number(n || 0).toLocaleString() }
 function getPhotoUrl(path){ const { data } = supabase.storage.from('job-photos').getPublicUrl(path); return data.publicUrl }
@@ -98,7 +112,7 @@ export default function AppNew(){
   const [roughPct, setRoughPct] = useState(50)
   const [trimPct, setTrimPct] = useState(20)
 
-  const [services, setServices] = useState(() => SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
+  const [services, setServices] = useState(() => mergeServices(null))
   const [addons, setAddons] = useState([])
   const [notes, setNotes] = useState('')
   const [history, setHistory] = useState([])
@@ -170,11 +184,25 @@ export default function AppNew(){
   const showPrintNote = projectType === 'New Construction' && selectedPhaseNames.length > 0 && (docType === 'quote' || selectedPhaseNames.length < 3)
   const printAddress = address || ''
 
-  const servicesTotal = useMemo(()=> services.reduce((s,it)=> {
-    if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return s
-    return s + (it.enabled ? (it.qty||0)*(it.unit||0) : 0)
+  const servicesTotal = useMemo(()=> services.reduce((sum,it)=> {
+    if (!it.enabled) return sum
+    if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return sum
+    if (it.id === 'wh_replacement') return sum + (it.garageQty||0)*(it.garageUnit||0) + (it.atticQty||0)*(it.atticUnit||0)
+    return sum + (it.qty||0)*(it.unit||0)
   }, 0), [services, isNewConstruction])
-  const printServices = services.filter(s => s.enabled && s.qty>0 && !(isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct'))
+  const printServices = services.flatMap(s => {
+    if (!s.enabled) return []
+    if (isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct') return []
+    if (s.id === 'wh_replacement') {
+      const rows = []
+      if ((s.garageQty||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Garage', qty: s.garageQty||0, unit: s.garageUnit||0 })
+      if ((s.atticQty||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Attic', qty: s.atticQty||0, unit: s.atticUnit||0 })
+      return rows
+    }
+    if (!(s.qty||0)) return []
+    const name = (s.id === 'water_tap' || s.id === 'sewer_tap') && s.desc ? `${s.name} — ${s.desc}` : s.name
+    return [{ ...s, name }]
+  })
   const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
   const subtotal = base + servicesTotal + addonsTotal
   const isPhaseInvoice = docType === 'invoice' && projectType === 'New Construction' && selectedPhaseNames.length > 0
@@ -483,7 +511,7 @@ export default function AppNew(){
     setUndergroundPct(data.underground_pct ?? 30)
     setRoughPct(data.rough_pct ?? 50)
     setTrimPct(data.trim_pct ?? 20)
-    setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0 })))
+    setServices(mergeServices(data.services))
     setAddons(data.addons ?? [])
     setNotes(data.notes ?? '')
     setHistory(data.history ?? [])
@@ -683,7 +711,7 @@ export default function AppNew(){
       setUndergroundPct(data.underground_pct ?? 30)
       setRoughPct(data.rough_pct ?? 50)
       setTrimPct(data.trim_pct ?? 20)
-      setServices(data.services ?? SERVICES.map(s=>({ ...s, enabled:false, qty:0 })))
+      setServices(mergeServices(data.services))
       setAddons(data.addons ?? [])
       setNotes(data.notes ?? '')
       setHistory(data.history ?? [])
@@ -839,7 +867,7 @@ export default function AppNew(){
     setUndergroundPct(30)
     setRoughPct(50)
     setTrimPct(20)
-    setServices(SERVICES.map(s=>({ ...s, enabled:false, qty:0, unit:0, ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}) })))
+    setServices(mergeServices(null))
     setAddons([])
     setNotes('')
     setHistory([])
@@ -1301,28 +1329,64 @@ export default function AppNew(){
         <section className={servicesTotal===0 ? 'no-print' : undefined} style={{ marginTop:14 }}>
           <h4 style={{ color:GOLD }}>Independent Services</h4>
           <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
-            {services.map((s,i)=> (
-              <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
-                <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
-                <div style={{ flex:1 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                    <span>{s.name}</span>
-                    {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
-                      <div className='no-print' style={{ display:'flex', gap:2 }}>
-                        <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
-                        <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
+            {services.map((s,i)=> {
+              // Water Heater Replacement — Garage + Attic sub-rows
+              if (s.id === 'wh_replacement') {
+                const whTotal = s.enabled ? (s.garageQty||0)*(s.garageUnit||0)+(s.atticQty||0)*(s.atticUnit||0) : 0
+                return (
+                  <div key={s.id} className='no-print' style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                      <input type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                      <span style={{ flex:1 }}>{s.name}</span>
+                      <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(whTotal)}</div>
+                    </div>
+                    {s.enabled && (
+                      <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                        {[['Garage','garageQty','garageUnit'],['Attic','atticQty','atticUnit']].map(([label,qKey,uKey])=>(
+                          <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                            <span style={{ color:'#9fb0c6', fontSize:12, width:52, flexShrink:0 }}>{label}</span>
+                            <input type='number' value={s[qKey]||0} onChange={e=>updateService(i,qKey,Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
+                            <input type='text' value={formatMoneyInput(s[uKey]||0)} onChange={e=>updateService(i,uKey,parseMoneyInput(e.target.value))} style={{ width:100 }} placeholder='Price/unit' />
+                            <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s[qKey]||0)*(s[uKey]||0))}</div>
+                          </div>
+                        ))}
                       </div>
-                    ) : null}
-                    {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
-                      <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
+                    )}
+                  </div>
+                )
+              }
+
+              // Standard row (with optional desc field for water_tap / sewer_tap)
+              const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
+              const tapPlaceholder = s.id === 'water_tap' ? 'Distance (e.g. 150 ft from meter)' : 'Depth (e.g. 8 ft deep)'
+              return (
+                <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)', flexWrap: isTap ? 'wrap' : undefined }}>
+                  <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                  <div style={{ flex:1, minWidth: isTap ? 160 : undefined }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <span>{s.name}</span>
+                      {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
+                        <div className='no-print' style={{ display:'flex', gap:2 }}>
+                          <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                          <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
+                        </div>
+                      ) : null}
+                      {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
+                        <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
+                      ) : null}
+                    </div>
+                    {isTap && s.enabled ? (
+                      <input className='no-print' type='text' value={s.desc||''} onChange={e=>updateService(i,'desc',e.target.value)}
+                        placeholder={tapPlaceholder}
+                        style={{ marginTop:4, fontSize:12, padding:'3px 8px', borderRadius:4, background:'#0a1e32', color:'#fff', border:'1px solid #223', width:'100%', boxSizing:'border-box' }} />
                     ) : null}
                   </div>
+                  <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
+                  <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                  <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
                 </div>
-                <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
-                <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
-                <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
-              </div>
-            ))}
+              )
+            })}
             <div style={{ textAlign:'right', marginTop:8, color:GOLD }}>Services total: {formatCurrency(servicesTotal)}</div>
           </div>
         </section>
