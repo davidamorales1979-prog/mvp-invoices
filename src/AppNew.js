@@ -451,6 +451,46 @@ export default function AppNew(){
           setLogoUrl(data.logo_url ? getLogoUrl(data.logo_url) : '')
         }
       } else {
+        // No profile yet — check if this email has a pending team invite
+        // (handles case where user arrives without ?join=TOKEN in URL)
+        try {
+          const { data: invite } = await supabase
+            .from('team_members')
+            .select('invite_token, account_id')
+            .eq('email', user.email.toLowerCase())
+            .eq('status', 'pending')
+            .maybeSingle()
+
+          if (invite?.invite_token) {
+            const { data: acceptResult, error: acceptErr } = await supabase.functions.invoke('accept-team-invite', {
+              body: { token: invite.invite_token }
+            })
+            if (!acceptErr && !acceptResult?.error) {
+              // Re-fetch the newly created profile
+              const { data: newProfile } = await supabase
+                .from('profiles').select('*').eq('user_id', user.id).maybeSingle()
+              if (newProfile) {
+                setProfile(newProfile)
+                setUserRole('member')
+                setAccountId(invite.account_id)
+                const { data: adminP } = await supabase
+                  .from('profiles').select('*').eq('user_id', invite.account_id).maybeSingle()
+                const src = adminP || newProfile
+                setProfileCompany(src.company_name || '')
+                setProfileName1(src.name1 || '')
+                setProfileName2(src.name2 || '')
+                setProfileName3(src.name3 || '')
+                setContractor(src.name1 || src.company_name || 'MVP Solutions')
+                setLogoUrl(src.logo_url ? getLogoUrl(src.logo_url) : '')
+                return
+              }
+            }
+          }
+        } catch (inviteCheckErr) {
+          console.warn('Invite check failed, treating as new user:', inviteCheckErr)
+        }
+
+        // No invite found — treat as new independent user
         setProfile(null)
         setAccountId(user.id)
         setUserRole('admin')
@@ -632,8 +672,8 @@ export default function AppNew(){
       try {
         const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', accountId).single()
         let sub = data
-        // PGRST116 = no rows — create a trial only for account owners (not members)
-        if (!sub && error?.code === 'PGRST116' && accountId === user.id) {
+        // PGRST116 = no rows — create a trial only for independent account owners (never for team members)
+        if (!sub && error?.code === 'PGRST116' && accountId === user.id && userRole !== 'member') {
           const trialEnd = new Date()
           trialEnd.setDate(trialEnd.getDate() + 30)
           const ins = await supabase.from('subscriptions')
@@ -1113,6 +1153,23 @@ export default function AppNew(){
     const isExpired = subscription?.status === 'trialing' && trialDaysLeft === 0
     const isPastDue = subscription?.status === 'past_due'
     const isCanceled = subscription?.status === 'canceled'
+
+    // Team members never see Stripe — they don't pay, their owner does
+    if (userRole === 'member') {
+      return (
+        <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ width:400, padding:32, background:'#071827', borderRadius:14, boxShadow:'0 10px 40px rgba(0,0,0,0.5)', textAlign:'center' }}>
+            <img src='/logo.svg' alt='FieldQuote' style={{ height:80, width:'auto', marginBottom:24 }} />
+            <h2 style={{ color:GOLD, marginBottom:8 }}>Account Inactive</h2>
+            <p style={{ color:'#9fb0c6', marginBottom:24, lineHeight:1.6 }}>
+              Your team account is currently inactive. Please ask your account owner to renew their FieldQuote subscription to restore access.
+            </p>
+            <button onClick={signOut} style={{ background:'transparent', border:`1px solid ${GOLD}`, color:GOLD, padding:'10px 24px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14 }}>Sign Out</button>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ width:400, padding:32, background:'#071827', borderRadius:14, boxShadow:'0 10px 40px rgba(0,0,0,0.5)', textAlign:'center' }}>
@@ -2770,6 +2827,21 @@ function JoinPage({ token, user, authLoading }) {
       .finally(() => setInfoLoading(false))
   }, [token])
 
+  // Auto-accept when the user arrives already authenticated (magic link flow)
+  useEffect(() => {
+    if (!user || !info || info.status !== 'pending' || accepting || done) return
+    setAccepting(true)
+    supabase.functions.invoke('accept-team-invite', { body: { token } })
+      .then(({ data, error }) => {
+        if (error || data?.error) {
+          setAuthMsg(data?.error || error?.message || 'Failed to accept invite.')
+          setAccepting(false)
+          return
+        }
+        setDone(true)
+      })
+  }, [user, info]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleAuth(isSignUp) {
     setAuthMsg('')
     const fn = isSignUp
@@ -2828,17 +2900,21 @@ function JoinPage({ token, user, authLoading }) {
           You've been invited to join <strong style={{ color:'#fff' }}>{info.company}</strong> on FieldQuote.
         </div>
 
-        {authLoading ? (
-          <div style={{ color:'#9fb0c6', fontSize:13 }}>Loading…</div>
+        {authLoading || (user && accepting) ? (
+          <div style={{ color:'#9fb0c6', fontSize:13, textAlign:'center', padding:'12px 0' }}>
+            {accepting ? `Joining ${info?.company || 'team'}…` : 'Loading…'}
+          </div>
         ) : user ? (
           <div>
             <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:14 }}>
               Signed in as <strong style={{ color:'#fff' }}>{user.email}</strong>
             </div>
             {authMsg && <div style={{ color:'#e05252', fontSize:13, marginBottom:10 }}>{authMsg}</div>}
-            <button onClick={handleAccept} disabled={accepting} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
-              {accepting ? 'Accepting…' : `Accept Invite & Join ${info.company}`}
-            </button>
+            {!accepting && (
+              <button onClick={handleAccept} disabled={accepting} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                {`Accept Invite & Join ${info.company}`}
+              </button>
+            )}
           </div>
         ) : (
           <div>
