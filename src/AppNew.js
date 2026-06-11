@@ -500,12 +500,16 @@ export default function AppNew(){
     if (params.get('checkout') !== 'success') return
     window.history.replaceState({}, '', window.location.pathname)
     let attempts = 0
+    const MAX = 15 // 15 × 2s = 30 seconds
     const poll = async () => {
-      const { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).single()
+      const { data } = await supabase.from('subscriptions').select('*').eq('user_id', user.id).maybeSingle()
       if (data?.status === 'active') {
         setSubscription(data)
-      } else if (attempts++ < 8) {
+      } else if (attempts++ < MAX) {
         setTimeout(poll, 2000)
+      } else {
+        // Polling ended — load whatever is in the DB now so the UI isn't stale
+        if (data) setSubscription(data)
       }
     }
     setTimeout(poll, 2000)

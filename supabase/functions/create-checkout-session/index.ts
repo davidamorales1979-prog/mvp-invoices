@@ -13,7 +13,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify the caller is a real authenticated user via their JWT
     const authHeader = req.headers.get('Authorization') ?? ''
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -35,18 +34,19 @@ Deno.serve(async (req) => {
       httpClient: Stripe.createFetchHttpClient(),
     })
 
-    // Use service role for DB writes (bypasses RLS)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    // Get or create a Stripe customer linked to this user
-    const { data: sub } = await supabaseAdmin
+    // Get or create Stripe customer linked to this user
+    const { data: sub, error: subError } = await supabaseAdmin
       .from('subscriptions')
       .select('stripe_customer_id')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
+
+    if (subError) console.error('create-checkout-session: sub lookup error:', subError.message)
 
     let customerId = sub?.stripe_customer_id
     if (!customerId) {
@@ -55,10 +55,18 @@ Deno.serve(async (req) => {
         metadata: { user_id: user.id },
       })
       customerId = customer.id
-      await supabaseAdmin.from('subscriptions').upsert(
-        { user_id: user.id, stripe_customer_id: customerId },
-        { onConflict: 'user_id' },
-      )
+
+      // Save the customer ID back to the subscriptions table
+      const { error: upsertError } = await supabaseAdmin
+        .from('subscriptions')
+        .upsert(
+          { user_id: user.id, stripe_customer_id: customerId },
+          { onConflict: 'user_id' },
+        )
+      if (upsertError) {
+        console.error('create-checkout-session: failed to save stripe_customer_id:', upsertError.message)
+        // Non-fatal: webhook has a metadata fallback
+      }
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -66,6 +74,10 @@ Deno.serve(async (req) => {
       payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [{ price: 'price_1TfAcaRcb5ReY7IfochZSsl7', quantity: 1 }],
+      // Stamp user_id on the subscription so the webhook can always resolve the user
+      subscription_data: {
+        metadata: { user_id: user.id },
+      },
       success_url: `${origin}/?checkout=success`,
       cancel_url: `${origin}/`,
       allow_promotion_codes: true,
@@ -76,6 +88,7 @@ Deno.serve(async (req) => {
       status: 200,
     })
   } catch (err) {
+    console.error('create-checkout-session error:', err.message)
     return new Response(JSON.stringify({ error: err.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
