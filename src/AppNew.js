@@ -138,6 +138,14 @@ export default function AppNew(){
   const [savedDocId, setSavedDocId] = useState(null)
   const [saveMessage, setSaveMessage] = useState('')
   const [savedDocs, setSavedDocs] = useState([])
+  const [trips, setTrips] = useState([])
+  const [tripsLoading, setTripsLoading] = useState(false)
+  const [showTripLog, setShowTripLog] = useState(false)
+  const [tripOrigin, setTripOrigin] = useState('')
+  const [tripDest, setTripDest] = useState('')
+  const [tripMiles, setTripMiles] = useState('')
+  const [tripSaving, setTripSaving] = useState(false)
+  const [tripMsg, setTripMsg] = useState('')
   const [clientPhotos, setClientPhotos] = useState([])
   const [photosLoading, setPhotosLoading] = useState(false)
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -603,6 +611,14 @@ export default function AppNew(){
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!savedDocId || !user) { setTrips([]); return }
+    setTripsLoading(true)
+    supabase.from('mileage_trips').select('*').eq('doc_id', String(savedDocId)).order('trip_date', { ascending: false })
+      .then(({ data }) => { setTrips(data || []) })
+      .finally(() => setTripsLoading(false))
+  }, [savedDocId, user])
+
+  useEffect(() => {
     if (!user) { setSubscription(null); setSubLoading(false); return }
     if (!accountId) return  // wait for profile/accountId to be resolved
     let cancelled = false
@@ -796,25 +812,25 @@ export default function AppNew(){
         if (error) {
           console.error('Supabase update error:', error)
           setSaveMessage(`Save failed: ${error.message}`)
-          return false
+          return null
         }
         setSaveMessage('Document saved successfully')
-        return true
+        return savedDocId
       }
 
       const { data, error } = await supabase.from('documents').insert([payload]).select('id').single()
       if (error) {
         console.error('Supabase insert error:', error)
         setSaveMessage(`Save failed: ${error.message}`)
-        return false
+        return null
       }
       setSavedDocId(data.id)
       setSaveMessage('Document saved successfully')
-      return true
+      return data.id
     } catch (e) {
       console.error('persistDocument exception:', e)
       setSaveMessage(`Save failed: ${e.message}`)
-      return false
+      return null
     }
   }
 
@@ -867,6 +883,12 @@ export default function AppNew(){
     // Reset all form fields to defaults
     setSavedDocId(null)
     setSaveMessage('')
+    setTrips([])
+    setTripOrigin('')
+    setTripDest('')
+    setTripMiles('')
+    setTripMsg('')
+    setShowTripLog(false)
     setContractor(defaultContractor)
     setShowLogo(true)
     setDocType('quote')
@@ -931,6 +953,43 @@ export default function AppNew(){
       await supabase.from('photos').delete().eq('id', photo.id)
       setClientPhotos(p => p.filter(x => x.id !== photo.id))
     } catch(e){ console.error('Delete photo error', e) }
+  }
+
+  async function logTrip() {
+    const miles = parseFloat(tripMiles) || 0
+    if (!tripOrigin.trim() || !tripDest.trim() || !miles) {
+      setTripMsg('Please fill in origin, destination, and miles.')
+      return
+    }
+    const docId = savedDocId || await persistDocument()
+    if (!docId) { setTripMsg('Save the document first.'); return }
+    setTripSaving(true)
+    setTripMsg('')
+    const today = new Date().toISOString().slice(0, 10)
+    const { error } = await supabase.from('mileage_trips').insert([{
+      user_id: accountId || user.id,
+      doc_id: String(docId),
+      trip_date: today,
+      origin: tripOrigin.trim(),
+      destination: tripDest.trim(),
+      miles,
+      purpose: client || '',
+    }])
+    if (error) { setTripMsg('Failed: ' + error.message); setTripSaving(false); return }
+    setTripOrigin('')
+    setTripDest('')
+    setTripMiles('')
+    setTripMsg('Trip logged!')
+    setTimeout(() => setTripMsg(''), 2000)
+    const { data } = await supabase.from('mileage_trips').select('*').eq('doc_id', String(docId)).order('trip_date', { ascending: false })
+    setTrips(data || [])
+    setTripSaving(false)
+  }
+
+  async function deleteTrip(id) {
+    if (!window.confirm('Delete this trip?')) return
+    await supabase.from('mileage_trips').delete().eq('id', id)
+    setTrips(t => t.filter(x => x.id !== id))
   }
 
   function sendEmail(){
@@ -1538,9 +1597,75 @@ export default function AppNew(){
           </div>
         </section>
 
+        {savedDocId ? (
+          <section className='no-print' style={{ marginTop:14 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+              <h4 style={{ color:GOLD, margin:0 }}>Mileage Log</h4>
+              <button type='button' onClick={() => setShowTripLog(s => !s)} style={{ background:'#0f2740', color:GOLD, border:`1px solid ${GOLD}`, padding:'4px 12px', borderRadius:6 }}>
+                {showTripLog ? 'Hide' : 'Log Trip'}
+              </button>
+            </div>
+            {showTripLog && (
+              <div style={{ background:'#041827', borderRadius:8, padding:14 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 90px', gap:8, marginBottom:8 }}>
+                  <input value={tripOrigin} onChange={e=>setTripOrigin(e.target.value)} placeholder='Origin' style={{ padding:8, borderRadius:6, background:'#071827', color:'#fff', border:'1px solid #334' }} />
+                  <input value={tripDest} onChange={e=>setTripDest(e.target.value)} placeholder='Destination' style={{ padding:8, borderRadius:6, background:'#071827', color:'#fff', border:'1px solid #334' }} />
+                  <input value={tripMiles} onChange={e=>setTripMiles(e.target.value)} type='number' min='0' step='0.1' placeholder='Miles' style={{ padding:8, borderRadius:6, background:'#071827', color:'#fff', border:'1px solid #334', width:'100%' }} />
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div style={{ color:'#7f98b0', fontSize:12 }}>Purpose: <span style={{ color:'#fff' }}>{client || '(client name)'}</span></div>
+                  <button type='button' onClick={logTrip} disabled={tripSaving} style={{ background:GOLD, color:NAVY, padding:'6px 18px', borderRadius:6, fontWeight:700 }}>
+                    {tripSaving ? 'Saving…' : 'Add Trip'}
+                  </button>
+                </div>
+                {tripMsg && <div style={{ color:GOLD, fontSize:12, marginTop:6 }}>{tripMsg}</div>}
+                {tripsLoading ? (
+                  <div style={{ color:'#7f98b0', marginTop:10 }}>Loading…</div>
+                ) : trips.length > 0 && (
+                  <table style={{ width:'100%', borderCollapse:'collapse', marginTop:14 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign:'left', padding:'6px 8px', color:GOLD, fontSize:11, fontWeight:700 }}>Date</th>
+                        <th style={{ textAlign:'left', padding:'6px 8px', color:GOLD, fontSize:11, fontWeight:700 }}>Origin</th>
+                        <th style={{ textAlign:'left', padding:'6px 8px', color:GOLD, fontSize:11, fontWeight:700 }}>Destination</th>
+                        <th style={{ textAlign:'right', padding:'6px 8px', color:GOLD, fontSize:11, fontWeight:700 }}>Miles</th>
+                        <th style={{ textAlign:'left', padding:'6px 8px', color:GOLD, fontSize:11, fontWeight:700 }}>Purpose</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trips.map(t => (
+                        <tr key={t.id} style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding:'6px 8px', color:'#9fb0c6', fontSize:12 }}>{t.trip_date}</td>
+                          <td style={{ padding:'6px 8px', color:'#fff', fontSize:12 }}>{t.origin}</td>
+                          <td style={{ padding:'6px 8px', color:'#fff', fontSize:12 }}>{t.destination}</td>
+                          <td style={{ padding:'6px 8px', color:GOLD, textAlign:'right', fontSize:12 }}>{Number(t.miles||0).toFixed(1)}</td>
+                          <td style={{ padding:'6px 8px', color:'#9fb0c6', fontSize:12 }}>{t.purpose}</td>
+                          <td style={{ padding:'6px 8px' }}>
+                            <button type='button' onClick={() => deleteTrip(t.id)} style={{ background:'#7a0a0a', color:'#fff', border:'none', padding:'2px 8px', borderRadius:4, fontSize:11, cursor:'pointer' }}>✕</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop:`2px solid ${GOLD}44` }}>
+                        <td colSpan={3} style={{ padding:'6px 8px', color:'#9fb0c6', fontSize:12, fontWeight:700 }}>Total</td>
+                        <td style={{ padding:'6px 8px', color:GOLD, textAlign:'right', fontSize:12, fontWeight:700 }}>
+                          {trips.reduce((s,t)=>s+(Number(t.miles)||0),0).toFixed(1)}
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {showDashboard ? (
           <div className='no-print'>
-            <DashboardPanel docs={savedDocs} alerts={paymentAlerts} onMarkPaid={markPhasePaid} onClose={()=>setShowDashboard(false)} />
+            <DashboardPanel docs={savedDocs} alerts={paymentAlerts} onMarkPaid={markPhasePaid} onClose={()=>setShowDashboard(false)} user={user} accountId={accountId} />
           </div>
         ) : null}
 
@@ -1943,10 +2068,67 @@ function SignaturePage({ token }) {
   )
 }
 
-function DashboardPanel({ docs, alerts, onMarkPaid, onClose }) {
+function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId }) {
   const now = new Date()
   const yr = now.getFullYear()
   const mo = now.getMonth()
+
+  const [allTrips, setAllTrips] = useState([])
+  const [mileYear, setMileYear] = useState(yr)
+
+  useEffect(() => {
+    if (!user || !accountId) return
+    supabase.from('mileage_trips').select('*').eq('user_id', accountId).order('trip_date', { ascending: true })
+      .then(({ data }) => setAllTrips(data || []))
+  }, [user, accountId])
+
+  const yearTrips = allTrips.filter(t => t.trip_date && t.trip_date.startsWith(String(mileYear)))
+  const yearTotal = yearTrips.reduce((s, t) => s + (Number(t.miles) || 0), 0)
+  const mileByMonth = {}
+  yearTrips.forEach(t => {
+    const key = t.trip_date.slice(0, 7)
+    mileByMonth[key] = (mileByMonth[key] || 0) + (Number(t.miles) || 0)
+  })
+  const mileMonths = Object.keys(mileByMonth).sort()
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+  function exportMileagePdf() {
+    const win = window.open('', '_blank')
+    if (!win) return
+    const RATE = 0.70
+    const rows = yearTrips.map(t => `
+      <tr>
+        <td>${t.trip_date}</td>
+        <td>${t.origin || ''}</td>
+        <td>${t.destination || ''}</td>
+        <td style="text-align:right">${Number(t.miles||0).toFixed(1)}</td>
+        <td>${t.purpose || ''}</td>
+        <td style="text-align:right">$${(Number(t.miles||0)*RATE).toFixed(2)}</td>
+      </tr>`).join('')
+    win.document.write(`<!DOCTYPE html><html><head><title>Mileage Log ${mileYear}</title><style>
+      body{font-family:Arial,sans-serif;padding:32px;color:#111;}
+      h1{font-size:22px;margin-bottom:4px;}
+      .meta{color:#555;font-size:13px;margin-bottom:24px;}
+      table{width:100%;border-collapse:collapse;font-size:13px;}
+      th{background:#0a1628;color:#fff;padding:8px 10px;text-align:left;}
+      th:nth-child(4),th:nth-child(6){text-align:right;}
+      td{padding:7px 10px;border-bottom:1px solid #e0e0e0;}
+      tr:nth-child(even) td{background:#f9f9f9;}
+      tfoot td{font-weight:bold;background:#f0f0f0;}
+      .footer{margin-top:24px;font-size:11px;color:#888;}
+    </style></head><body>
+      <h1>Mileage Log — ${mileYear}</h1>
+      <div class="meta">IRS Standard Rate: $${RATE}/mile &nbsp;|&nbsp; Total Miles: ${yearTotal.toFixed(1)} &nbsp;|&nbsp; Est. Deduction: $${(yearTotal*RATE).toFixed(2)}</div>
+      <table>
+        <thead><tr><th>Date</th><th>Origin</th><th>Destination</th><th>Miles</th><th>Purpose</th><th>Deduction</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td colspan="3">Total</td><td style="text-align:right">${yearTotal.toFixed(1)}</td><td></td><td style="text-align:right">$${(yearTotal*RATE).toFixed(2)}</td></tr></tfoot>
+      </table>
+      <div class="footer">Generated by FieldQuote &nbsp;|&nbsp; For IRS Schedule C / Form 2106 use</div>
+    </body></html>`)
+    win.document.close()
+    setTimeout(() => win.print(), 400)
+  }
 
   const isThisMonth = d => { const x = new Date(d); return x.getFullYear() === yr && x.getMonth() === mo }
 
@@ -2064,6 +2246,57 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose }) {
             </div>
           )
         })}
+      </div>
+
+      <div style={{ background:'#071827', borderRadius:8, padding:'16px', marginTop:14 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px' }}>Mileage Tracking</div>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <select value={mileYear} onChange={e=>setMileYear(Number(e.target.value))} style={{ background:'#0f2740', color:'#fff', border:'1px solid #334', padding:'4px 8px', borderRadius:6, fontSize:12 }}>
+              {[yr-1, yr, yr+1].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <button onClick={exportMileagePdf} disabled={yearTrips.length === 0} style={{ background:GOLD, color:NAVY, padding:'4px 14px', borderRadius:6, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+              Export PDF
+            </button>
+          </div>
+        </div>
+        {mileMonths.length === 0 ? (
+          <div style={{ color:'#7f98b0', fontSize:13 }}>No trips logged for {mileYear}.</div>
+        ) : (
+          <>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, marginBottom:10 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign:'left', padding:'6px 8px', color:GOLD, fontWeight:700, fontSize:11 }}>Month</th>
+                  <th style={{ textAlign:'right', padding:'6px 8px', color:GOLD, fontWeight:700, fontSize:11 }}>Miles</th>
+                  <th style={{ textAlign:'right', padding:'6px 8px', color:GOLD, fontWeight:700, fontSize:11 }}>Est. Deduction</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mileMonths.map(key => {
+                  const [y, m] = key.split('-')
+                  const label = `${MONTH_NAMES[parseInt(m,10)-1]} ${y}`
+                  const miles = mileByMonth[key]
+                  return (
+                    <tr key={key} style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding:'6px 8px', color:'#fff' }}>{label}</td>
+                      <td style={{ padding:'6px 8px', color:GOLD, textAlign:'right' }}>{miles.toFixed(1)}</td>
+                      <td style={{ padding:'6px 8px', color:'#4caf50', textAlign:'right' }}>${(miles*0.70).toFixed(2)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop:`2px solid ${GOLD}44` }}>
+                  <td style={{ padding:'6px 8px', color:'#9fb0c6', fontWeight:700 }}>Total {mileYear}</td>
+                  <td style={{ padding:'6px 8px', color:GOLD, textAlign:'right', fontWeight:700 }}>{yearTotal.toFixed(1)}</td>
+                  <td style={{ padding:'6px 8px', color:'#4caf50', textAlign:'right', fontWeight:700 }}>${(yearTotal*0.70).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div style={{ color:'#7f98b0', fontSize:11 }}>IRS standard rate: $0.70/mile &nbsp;·&nbsp; For Schedule C / Form 2106</div>
+          </>
+        )}
       </div>
     </div>
   )
