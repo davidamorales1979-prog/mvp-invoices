@@ -2096,15 +2096,18 @@ function HelpPanel({ onClose }) {
       ]
     },
     {
-      title: 'Settings — Company & Contractor Names',
-      desc: 'Update your company name and the contractor names that appear on every quote and invoice.',
+      title: 'Settings — Company Profile & Logo',
+      desc: 'Update your company name, contractor names, and company logo. Your logo appears on all client-facing documents.',
       steps: [
         'Click Settings in the toolbar.',
         'Under Company Profile, enter your company name and up to three contractor names.',
         'Contractor Name 1 is required — it appears as the default selected contractor.',
         'Names 2 and 3 are optional. Click the ✕ next to a name to remove it.',
         'Click Save Changes. Your contractor name buttons in the toolbar update immediately.',
-        'The company name and contractor names print on every quote and invoice header.',
+        'Under Company Logo, click Upload Logo to select a PNG, JPG, or SVG (max 2 MB).',
+        'Once uploaded, your logo replaces the FieldQuote logo on all printed PDFs and the client signature page.',
+        'The FieldQuote logo in the app header remains — it is the app branding and is not affected by your upload.',
+        'Click Change Logo to swap it out, or Remove to go back to the FieldQuote default on documents.',
       ]
     },
     {
