@@ -248,13 +248,16 @@ export default function AppNew(){
     ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
     : 0
   const isAdmin = userRole === 'admin'
+  const isReadOnly = userRole === 'member' && docType === 'invoice'
 
   const fetchSavedDocs = useCallback(async () => {
     if (!user || !accountId) return
+    const col = userRole === 'admin' ? 'user_id' : 'created_by'
+    const val = userRole === 'admin' ? accountId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('*')
-      .eq('user_id', accountId)
+      .eq(col, val)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -262,19 +265,21 @@ export default function AppNew(){
       return
     }
     setSavedDocs(data || [])
-  }, [user, accountId])
+  }, [user, accountId, userRole])
 
   const fetchScheduledDocs = useCallback(async () => {
     if (!user || !accountId) return
+    const col = userRole === 'admin' ? 'user_id' : 'created_by'
+    const val = userRole === 'admin' ? accountId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
-      .eq('user_id', accountId)
+      .eq(col, val)
       .not('scheduled_date', 'is', null)
       .order('scheduled_date', { ascending: true })
     if (error) { console.error('Supabase fetch scheduled docs error:', error); return }
     setAllScheduledDocs(data || [])
-  }, [user, accountId])
+  }, [user, accountId, userRole])
 
   const paymentAlerts = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
@@ -686,13 +691,16 @@ export default function AppNew(){
   }, [client, user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const docCol = userRole === 'admin' ? 'user_id' : 'created_by'
+    const docVal = userRole === 'admin' ? accountId : user?.id
+
     async function getMaxRawCounter(){
       if (!user || !accountId) return null
       try{
         const { data, error } = await supabase
           .from('documents')
           .select('raw_counter')
-          .eq('user_id', accountId)
+          .eq(docCol, docVal)
           .order('raw_counter', { ascending: false })
           .limit(1)
 
@@ -713,7 +721,7 @@ export default function AppNew(){
       const { data, error } = await supabase
         .from('documents')
         .select('*')
-        .eq('user_id', accountId)
+        .eq(docCol, docVal)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -765,7 +773,7 @@ export default function AppNew(){
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
     init()
-  }, [reset, fetchSavedDocs, user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reset, fetchSavedDocs, user, accountId, userRole]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
@@ -796,6 +804,7 @@ export default function AppNew(){
       status,
       total: displayTotal,
       user_id: accountId || user.id,
+      created_by: user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
       scheduled_date: scheduleDate || null,
@@ -863,7 +872,11 @@ export default function AppNew(){
         .order('raw_counter', { ascending: false })
         .limit(1)
 
-      const { data, error } = user ? await query.eq('user_id', accountId || user.id) : await query
+      const { data, error } = user
+        ? (userRole === 'admin'
+            ? await query.eq('user_id', accountId || user.id)
+            : await query.eq('created_by', user.id))
+        : await query
 
       let next
       if (!error && Array.isArray(data) && data.length > 0 && data[0].raw_counter != null) {
@@ -967,7 +980,8 @@ export default function AppNew(){
     setTripMsg('')
     const today = new Date().toISOString().slice(0, 10)
     const { error } = await supabase.from('mileage_trips').insert([{
-      user_id: accountId || user.id,
+      user_id: user.id,
+      account_id: accountId,
       doc_id: String(docId),
       trip_date: today,
       origin: tripOrigin.trim(),
@@ -1184,15 +1198,15 @@ export default function AppNew(){
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='quote'} onChange={()=>setDocType('quote')} /> Quote</label>
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
-            <button onClick={saveDocument} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Save Document</button>
-            <button onClick={()=>setShowDashboard(s=>!s)} style={{ background:showDashboard ? GOLD : '#0f2740', color:showDashboard ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Dashboard</button>
+            <button onClick={saveDocument} disabled={isReadOnly} style={{ background: isReadOnly ? '#1a1a2e' : '#0f2740', color: isReadOnly ? '#555' : '#fff', border:`1px solid ${isReadOnly ? '#333' : GOLD}`, padding:8, borderRadius:6, cursor: isReadOnly ? 'not-allowed' : 'pointer' }}>Save Document</button>
+            {isAdmin && <button onClick={()=>setShowDashboard(s=>!s)} style={{ background:showDashboard ? GOLD : '#0f2740', color:showDashboard ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Dashboard</button>}
             <button onClick={()=>setShowSchedule(s=>!s)} style={{ background:showSchedule ? GOLD : '#0f2740', color:showSchedule ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Schedule</button>
             <button onClick={()=>setShowClients(s=>!s)} style={{ background:showClients ? GOLD : '#0f2740', color:showClients ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Clients</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
             <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
-            <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>
+            {isAdmin && <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>}
             <button onClick={requestSignature} disabled={sigRequestLoading}
               style={{ background: signedAt ? '#1a3d1a' : showSigModal ? GOLD : '#0f2740', color: signedAt ? '#4caf50' : showSigModal ? NAVY : '#fff', border:`1px solid ${signedAt ? '#4caf50' : GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
               {sigRequestLoading ? '…' : signedAt ? '✓ Signed' : '✍ Signature'}
@@ -1200,6 +1214,22 @@ export default function AppNew(){
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
             <span className='toolbar-email' style={{ color:'#9fb0c6' }}>{user?.email}</span>
           </div>
+          {!isAdmin && (
+            <div style={{ width:'100%', marginTop:6, display:'flex', gap:8, alignItems:'center' }}>
+              <span style={{ background:'#1a2840', color:'#9fb0c6', border:'1px solid #334', padding:'3px 10px', borderRadius:10, fontSize:11, fontWeight:600, letterSpacing:'0.5px' }}>
+                Team Member
+              </span>
+              <span style={{ color:'#7f98b0', fontSize:12 }}>
+                You can create &amp; edit quotes, convert to invoice, and log your own mileage.
+              </span>
+            </div>
+          )}
+          {isReadOnly && (
+            <div style={{ width:'100%', marginTop:6, background:'#1a0a00', border:'1px solid #7a3a00', borderRadius:6, padding:'8px 14px', display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ color:'#e87040', fontSize:13, fontWeight:700 }}>Read-only:</span>
+              <span style={{ color:'#c9a06c', fontSize:13 }}>This invoice has been created and cannot be edited by team members.</span>
+            </div>
+          )}
           {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700, width:'100%' }}>{saveMessage}</div> : null}
         </div>
 
@@ -2078,7 +2108,7 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId }) 
 
   useEffect(() => {
     if (!user || !accountId) return
-    supabase.from('mileage_trips').select('*').eq('user_id', accountId).order('trip_date', { ascending: true })
+    supabase.from('mileage_trips').select('*').eq('account_id', user.id).order('trip_date', { ascending: true })
       .then(({ data }) => setAllTrips(data || []))
   }, [user, accountId])
 
