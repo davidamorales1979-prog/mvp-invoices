@@ -122,6 +122,13 @@ export default function AppNew(){
   const [billingPortalLoading, setBillingPortalLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const signToken = useMemo(() => new URLSearchParams(window.location.search).get('sign'), [])
+  const [signatureToken, setSignatureToken] = useState(null)
+  const [signatureData, setSignatureData] = useState(null)
+  const [signedAt, setSignedAt] = useState(null)
+  const [signerName, setSignerName] = useState('')
+  const [showSigModal, setShowSigModal] = useState(false)
+  const [sigRequestLoading, setSigRequestLoading] = useState(false)
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -277,6 +284,32 @@ export default function AppNew(){
     }
   }
 
+  async function requestSignature() {
+    if (!savedDocId) {
+      const saved = await persistDocument()
+      if (!saved) return
+      await fetchSavedDocs()
+    }
+    setSigRequestLoading(true)
+    let token = signatureToken
+    if (!token) {
+      token = crypto.randomUUID()
+      const { error } = await supabase
+        .from('documents')
+        .update({ signature_token: token })
+        .eq('id', savedDocId)
+        .eq('user_id', user.id)
+      if (error) {
+        setSaveMessage('Failed to create signature link: ' + error.message)
+        setSigRequestLoading(false)
+        return
+      }
+      setSignatureToken(token)
+    }
+    setSigRequestLoading(false)
+    setShowSigModal(true)
+  }
+
   async function signUp(){
     setAuthMessage('')
     const { error } = await supabase.auth.signUp({ email, password })
@@ -405,6 +438,10 @@ export default function AppNew(){
     setHistory(data.history ?? [])
     setStatus(data.status ?? 'draft')
     setScheduleDate(data.scheduled_date ?? '')
+    setSignatureToken(data.signature_token ?? null)
+    setSignatureData(data.signature_data ?? null)
+    setSignedAt(data.signed_at ?? null)
+    setSignerName(data.signer_name ?? '')
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
@@ -600,6 +637,10 @@ export default function AppNew(){
       setHistory(data.history ?? [])
       setStatus(data.status ?? 'draft')
       setScheduleDate(data.scheduled_date ?? '')
+      setSignatureToken(data.signature_token ?? null)
+      setSignatureData(data.signature_data ?? null)
+      setSignedAt(data.signed_at ?? null)
+      setSignerName(data.signer_name ?? '')
     }
 
     async function init() {
@@ -644,6 +685,10 @@ export default function AppNew(){
       doc_number: docNumber,
       raw_counter: counter.raw,
       scheduled_date: scheduleDate || null,
+      signature_token: signatureToken,
+      signature_data: signatureData,
+      signed_at: signedAt,
+      signer_name: signerName || null,
       ...overrides
     }
 
@@ -748,6 +793,11 @@ export default function AppNew(){
     setHistory([])
     setStatus('draft')
     setScheduleDate('')
+    setSignatureToken(null)
+    setSignatureData(null)
+    setSignedAt(null)
+    setSignerName('')
+    setShowSigModal(false)
     pushHistory('reset:number')
   }
 
@@ -814,6 +864,8 @@ export default function AppNew(){
     const body = bodyParts.filter(l => l !== null).join('\n')
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
+
+  if (signToken) return <SignaturePage token={signToken} />
 
   if (authLoading || (user && !profileChecked)) {
     return (
@@ -983,11 +1035,48 @@ export default function AppNew(){
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
             <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>
+            <button onClick={requestSignature} disabled={sigRequestLoading}
+              style={{ background: signedAt ? '#1a3d1a' : showSigModal ? GOLD : '#0f2740', color: signedAt ? '#4caf50' : showSigModal ? NAVY : '#fff', border:`1px solid ${signedAt ? '#4caf50' : GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
+              {sigRequestLoading ? '…' : signedAt ? '✓ Signed' : '✍ Signature'}
+            </button>
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
             <span className='toolbar-email' style={{ color:'#9fb0c6' }}>{user?.email}</span>
           </div>
           {saveMessage ? <div style={{ color:GOLD, marginTop:8, fontWeight:700, width:'100%' }}>{saveMessage}</div> : null}
         </div>
+
+        {showSigModal && (
+          <div className='no-print' style={{ marginTop:12, background:'#041827', borderRadius:10, padding:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <h4 style={{ color:GOLD, margin:0 }}>Signature Request</h4>
+              <button onClick={()=>setShowSigModal(false)} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+            </div>
+            {signedAt ? (
+              <div>
+                <div style={{ color:'#4caf50', fontWeight:700, marginBottom:6, fontSize:15 }}>✓ Signed by {signerName}</div>
+                <div style={{ color:'#9fb0c6', fontSize:13, marginBottom:12 }}>Signed on {new Date(signedAt).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</div>
+                {signatureData && <img src={signatureData} alt='Client signature' style={{ height:72, background:'#fff', borderRadius:6, padding:8, display:'block' }} />}
+              </div>
+            ) : (
+              <>
+                <div style={{ color:'#9fb0c6', marginBottom:12, fontSize:14 }}>
+                  Share this link with <strong style={{ color:'#fff' }}>{client || 'your client'}</strong> so they can sign on their phone or computer:
+                </div>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                  <input readOnly value={`${window.location.origin}/?sign=${signatureToken}`}
+                    style={{ flex:1, minWidth:200, padding:10, borderRadius:6, border:'1px solid #334', background:'#0a1e32', color:'#9fb0c6', fontSize:13 }} />
+                  <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?sign=${signatureToken}`).then(()=>setSaveMessage('Signature link copied!'))}
+                    style={{ background:GOLD, color:NAVY, border:'none', padding:'10px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                    Copy Link
+                  </button>
+                </div>
+                <div style={{ marginTop:10, color:'#7f98b0', fontSize:12 }}>
+                  The client opens the link, sees the {docType} summary, draws their signature with a finger, and submits. The signed copy will appear here automatically.
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {showSettings ? (
           <div className='no-print'>
@@ -1483,6 +1572,18 @@ export default function AppNew(){
               </div>
             </div>
 
+            {signatureData && (
+              <div className='print-section' style={{ pageBreakInside:'avoid', marginTop:24 }}>
+                <div className='print-section-title'>Client Signature</div>
+                <img src={signatureData} alt='Client signature'
+                  style={{ height:80, maxWidth:'100%', display:'block', background:'#fff', border:'1px solid #e8e8e8', borderRadius:4, padding:6, marginBottom:8 }} />
+                <div style={{ fontSize:14, fontWeight:700, color:'#0a1628' }}>{signerName}</div>
+                <div style={{ fontSize:11, color:'#7f98b0', marginTop:2 }}>
+                  Signed electronically · {new Date(signedAt).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}
+                </div>
+              </div>
+            )}
+
             <div className='print-footer'>
               <div>Payment due upon receipt</div>
               <div>{contractor}</div>
@@ -1503,6 +1604,188 @@ export default function AppNew(){
           </div>
         </div>
 
+      </div>
+    </div>
+  )
+}
+
+function SignaturePage({ token }) {
+  const { useRef, useState, useEffect } = React
+  const canvasRef = useRef(null)
+  const isDrawing = useRef(false)
+  const [doc, setDoc] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(null)
+  const [name, setName] = useState('')
+  const [agreed, setAgreed] = useState(false)
+  const [isEmpty, setIsEmpty] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone] = useState(false)
+  const [doneMsg, setDoneMsg] = useState('')
+
+  useEffect(() => {
+    supabase.functions.invoke('get-signature-doc', { body: { token } })
+      .then(({ data, error }) => {
+        if (error || !data || data.error) {
+          setFetchError(error?.message || data?.error || 'Document not found')
+        } else {
+          setDoc(data)
+          if (data.signed_at) {
+            setDoneMsg(`This document was already signed by ${data.signer_name || 'the client'} on ${new Date(data.signed_at).toLocaleDateString()}.`)
+            setDone(true)
+          }
+        }
+        setLoading(false)
+      })
+  }, [token])
+
+  function getPos(e, canvas) {
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = canvas.width / rect.width
+    const scaleY = canvas.height / rect.height
+    if (e.touches) {
+      return { x: (e.touches[0].clientX - rect.left) * scaleX, y: (e.touches[0].clientY - rect.top) * scaleY }
+    }
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+  }
+
+  function onStart(e) {
+    e.preventDefault()
+    const c = canvasRef.current; if (!c) return
+    const ctx = c.getContext('2d'), pos = getPos(e, c)
+    ctx.beginPath(); ctx.moveTo(pos.x, pos.y)
+    isDrawing.current = true; setIsEmpty(false)
+  }
+
+  function onMove(e) {
+    e.preventDefault()
+    if (!isDrawing.current) return
+    const c = canvasRef.current; if (!c) return
+    const ctx = c.getContext('2d'), pos = getPos(e, c)
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0a1628'
+    ctx.lineTo(pos.x, pos.y); ctx.stroke()
+  }
+
+  function onEnd() { isDrawing.current = false }
+
+  function clearCanvas() {
+    const c = canvasRef.current; if (!c) return
+    c.getContext('2d').clearRect(0, 0, c.width, c.height)
+    setIsEmpty(true)
+  }
+
+  async function submit() {
+    if (isEmpty) { alert('Please draw your signature first'); return }
+    if (!name.trim()) { alert('Please enter your full name'); return }
+    if (!agreed) { alert('Please check the agreement box to continue'); return }
+    const signatureData = canvasRef.current.toDataURL('image/png')
+    setSubmitting(true)
+    const { data, error } = await supabase.functions.invoke('submit-signature', {
+      body: { token, signerName: name.trim(), signatureData }
+    })
+    if (error || data?.error) {
+      alert('Error submitting signature: ' + (error?.message || data?.error))
+      setSubmitting(false)
+      return
+    }
+    setDoneMsg('Your signature has been submitted. The contractor will receive your signed copy.')
+    setDone(true)
+    setSubmitting(false)
+  }
+
+  const wrap = { minHeight:'100vh', background:'#f4f6f9', color:'#0a1628', fontFamily:'system-ui,-apple-system,sans-serif' }
+  const center = { ...wrap, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }
+
+  if (loading) return <div style={center}><div style={{ color:'#666' }}>Loading document…</div></div>
+
+  if (fetchError) return (
+    <div style={center}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontSize:40, marginBottom:12 }}>🔗</div>
+        <div style={{ fontWeight:700, color:'#c00', marginBottom:6 }}>Link not found</div>
+        <div style={{ color:'#888', fontSize:14 }}>{fetchError}</div>
+      </div>
+    </div>
+  )
+
+  if (done) return (
+    <div style={center}>
+      <div style={{ textAlign:'center', maxWidth:380 }}>
+        <div style={{ fontSize:60, marginBottom:16 }}>✅</div>
+        <h2 style={{ margin:'0 0 10px', color:'#0a1628' }}>Document Signed!</h2>
+        <p style={{ color:'#555', lineHeight:1.6, margin:0 }}>{doneMsg}</p>
+        <p style={{ color:'#aaa', fontSize:13, marginTop:14 }}>Secured by FieldQuote</p>
+      </div>
+    </div>
+  )
+
+  const canSign = !isEmpty && name.trim() && agreed
+
+  return (
+    <div style={wrap}>
+      {/* Header */}
+      <div style={{ background:'#0a1628', padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <img src='/logo.svg' alt='FieldQuote' style={{ height:34 }} />
+        <div style={{ color:'#c9a84c', fontWeight:700, fontSize:14 }}>{doc.contractor}</div>
+      </div>
+
+      <div style={{ maxWidth:500, margin:'0 auto', padding:20 }}>
+
+        {/* Document summary card */}
+        <div style={{ background:'#fff', borderRadius:12, padding:20, marginBottom:16, boxShadow:'0 2px 10px rgba(0,0,0,0.08)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:11, textTransform:'uppercase', letterSpacing:'0.12em', color:'#999', marginBottom:4 }}>{doc.doc_type === 'invoice' ? 'Invoice' : 'Quote'}</div>
+              <div style={{ fontWeight:800, fontSize:22, color:'#0a1628' }}>{doc.doc_number}</div>
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontSize:11, color:'#999', marginBottom:4 }}>Total</div>
+              <div style={{ fontWeight:800, fontSize:26, color:'#c9a84c' }}>{formatCurrency(doc.total)}</div>
+            </div>
+          </div>
+          {doc.client ? <div style={{ marginBottom:4, fontSize:14 }}><span style={{ color:'#888' }}>Client: </span><strong>{doc.client}</strong></div> : null}
+          {doc.address ? <div style={{ marginBottom:4, fontSize:14 }}><span style={{ color:'#888' }}>Address: </span>{doc.address}</div> : null}
+          {doc.created_at ? <div style={{ color:'#bbb', fontSize:12, marginTop:8 }}>Issued {new Date(doc.created_at).toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' })}</div> : null}
+        </div>
+
+        {/* Agreement notice */}
+        <div style={{ background:'#fffbea', border:'1px solid #e8d080', borderRadius:8, padding:14, marginBottom:16, fontSize:13, color:'#4b3f2d', lineHeight:1.6 }}>
+          <strong>Agreement:</strong> By signing below, you authorize <strong>{doc.contractor}</strong> to proceed with the work described in {doc.doc_type} <strong>{doc.doc_number}</strong> for the total amount of <strong>{formatCurrency(doc.total)}</strong>.
+        </div>
+
+        {/* Full name */}
+        <div style={{ marginBottom:16 }}>
+          <label style={{ display:'block', marginBottom:6, fontWeight:600, fontSize:14, color:'#0a1628' }}>Your Full Name *</label>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder='Type your legal name'
+            style={{ width:'100%', padding:12, borderRadius:8, border:'1.5px solid #d0d5dd', fontSize:16, boxSizing:'border-box', background:'#fff', color:'#0a1628' }} />
+        </div>
+
+        {/* Signature canvas */}
+        <div style={{ marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <label style={{ fontWeight:600, fontSize:14, color:'#0a1628' }}>Draw Your Signature *</label>
+            {!isEmpty && <button onClick={clearCanvas} style={{ background:'none', border:'none', color:'#e05252', cursor:'pointer', fontSize:13, padding:0, fontWeight:600 }}>Clear</button>}
+          </div>
+          <canvas ref={canvasRef} width={460} height={160}
+            onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
+            onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+            style={{ width:'100%', height:160, border:'1.5px solid #d0d5dd', borderRadius:8, background:'#fff', cursor:'crosshair', touchAction:'none', display:'block' }} />
+          {isEmpty && <div style={{ textAlign:'center', color:'#bbb', fontSize:12, marginTop:6 }}>Sign with your finger or mouse</div>}
+        </div>
+
+        {/* Agree checkbox */}
+        <label style={{ display:'flex', gap:10, alignItems:'flex-start', marginBottom:20, cursor:'pointer' }}>
+          <input type='checkbox' checked={agreed} onChange={e=>setAgreed(e.target.checked)} style={{ marginTop:3, width:18, height:18, flexShrink:0, cursor:'pointer' }} />
+          <span style={{ fontSize:13, color:'#555', lineHeight:1.6 }}>I agree to the terms above and understand this electronic signature is legally binding.</span>
+        </label>
+
+        {/* Submit */}
+        <button onClick={submit} disabled={submitting || !canSign}
+          style={{ width:'100%', padding:16, borderRadius:10, background: canSign && !submitting ? '#0a1628' : '#ccc', color:'#fff', border:'none', fontWeight:700, fontSize:16, cursor: canSign && !submitting ? 'pointer' : 'not-allowed', transition:'background 0.15s' }}>
+          {submitting ? 'Submitting…' : 'Submit Signature'}
+        </button>
+
+        <div style={{ textAlign:'center', marginTop:14, color:'#bbb', fontSize:11 }}>Secured by FieldQuote · Electronic Signature</div>
       </div>
     </div>
   )
