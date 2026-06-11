@@ -14,20 +14,38 @@ function useCounter(key = 'mvp_invoice_counter_v1') {
 }
 
 const SERVICES = [
-  { id: 'sewer', name: 'Sewer Line', unit: 1200 },
-  { id: 'water', name: 'Water Line Meter', unit: 800 },
-  { id: 'temp_gas', name: 'Temp Gas', unit: 250 },
-  { id: 'gas_riser', name: 'Gas Riser', unit: 400 },
-  { id: 'manablok', name: 'Manablok System', unit: 950 },
-  { id: 'water_heater', name: 'Water Heater', unit: 600 },
-  { id: 'storm', name: 'Storm Drain', unit: 700 },
-  { id: 'repiping', name: 'Repiping', unit: 1500 },
-  { id: 'gas_indoor', name: 'Gas System Indoor', unit: 300 },
-  { id: 'grease', name: 'Grease Trap', unit: 450 },
-  { id: 'cut_bust', name: 'Cut and Bust Concrete', unit: 200 },
-  { id: 'water_tap', name: 'Water Meter Tap', unit: 0, desc: '' },
-  { id: 'sewer_tap', name: 'Sewer Tap', unit: 0, desc: '' },
-  { id: 'wh_replacement', name: 'Water Heater Replacement', unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
+  // Sewer
+  { id: 'sewer',        name: 'Sewer Line',                    unit: 1200 },
+  { id: 'sewer_tap',    name: 'Sewer Tap',                     unit: 0, desc: '' },
+  { id: 'storm',        name: 'Storm Drain',                   unit: 700 },
+  { id: 'grease',       name: 'Grease Trap',                   unit: 450 },
+  // Water
+  { id: 'water',        name: 'Water Line Meter',              unit: 800 },
+  { id: 'water_tap',    name: 'Water Meter Tap',               unit: 0, desc: '' },
+  // Gas
+  { id: 'temp_gas',     name: 'Temp Gas',                      unit: 250 },
+  { id: 'gas_riser',    name: 'Gas Riser',                     unit: 400 },
+  { id: 'gas_underground', name: 'Underground Gas Line',       unit: 0 },
+  { id: 'gas_indoor',   name: 'Gas System Indoor',             unit: 300 },
+  // Others
+  { id: 'water_heater', name: 'Water Heater',                  unit: 600 },
+  { id: 'wh_replacement', name: 'Water Heater Replacement',   unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
+  { id: 'manablok',     name: 'Manablok System',               unit: 950 },
+  { id: 'repiping',     name: 'Repiping',                      unit: 1500 },
+  { id: 'cut_bust',     name: 'Cut and Bust Concrete',         unit: 200 },
+  // Remodeling / Fixtures
+  { id: 'fixture_replace',    name: 'Fixture Replacement',            unit: 0 },
+  { id: 'toilet_replace',     name: 'Toilet Replacement',             unit: 0 },
+  { id: 'kitchen_faucet',     name: 'Kitchen Faucet Replacement',     unit: 0 },
+  { id: 'garbage_disposal',   name: 'Garbage Disposal Replacement',   unit: 0 },
+]
+
+const SERVICE_GROUPS = [
+  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease'] },
+  { label: 'Water',                ids: ['water', 'water_tap'] },
+  { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
+  { label: 'Others',               ids: ['water_heater', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
+  { label: 'Remodeling / Fixtures', ids: ['fixture_replace', 'toilet_replace', 'kitchen_faucet', 'garbage_disposal'] },
 ]
 
 const BASE_SERVICE_IDS = ['water', 'water_heater', 'manablok', 'gas_indoor']
@@ -1329,62 +1347,74 @@ export default function AppNew(){
         <section className={servicesTotal===0 ? 'no-print' : undefined} style={{ marginTop:14 }}>
           <h4 style={{ color:GOLD }}>Independent Services</h4>
           <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
-            {services.map((s,i)=> {
-              // Water Heater Replacement — Garage + Attic sub-rows
-              if (s.id === 'wh_replacement') {
-                const whTotal = s.enabled ? (s.garageQty||0)*(s.garageUnit||0)+(s.atticQty||0)*(s.atticUnit||0) : 0
-                return (
-                  <div key={s.id} className='no-print' style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
-                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                      <input type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
-                      <span style={{ flex:1 }}>{s.name}</span>
-                      <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(whTotal)}</div>
-                    </div>
-                    {s.enabled && (
-                      <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
-                        {[['Garage','garageQty','garageUnit'],['Attic','atticQty','atticUnit']].map(([label,qKey,uKey])=>(
-                          <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
-                            <span style={{ color:'#9fb0c6', fontSize:12, width:52, flexShrink:0 }}>{label}</span>
-                            <input type='number' value={s[qKey]||0} onChange={e=>updateService(i,qKey,Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
-                            <input type='text' value={formatMoneyInput(s[uKey]||0)} onChange={e=>updateService(i,uKey,parseMoneyInput(e.target.value))} style={{ width:100 }} placeholder='Price/unit' />
-                            <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s[qKey]||0)*(s[uKey]||0))}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-
-              // Standard row (with optional desc field for water_tap / sewer_tap)
-              const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
-              const tapPlaceholder = s.id === 'water_tap' ? 'Distance (e.g. 150 ft from meter)' : 'Depth (e.g. 8 ft deep)'
+            {SERVICE_GROUPS.map(group => {
+              const entries = group.ids
+                .map(id => { const i = services.findIndex(s => s.id === id); return i >= 0 ? { s: services[i], i } : null })
+                .filter(Boolean)
               return (
-                <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)', flexWrap: isTap ? 'wrap' : undefined }}>
-                  <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
-                  <div style={{ flex:1, minWidth: isTap ? 160 : undefined }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <span>{s.name}</span>
-                      {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
-                        <div className='no-print' style={{ display:'flex', gap:2 }}>
-                          <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
-                          <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
-                        </div>
-                      ) : null}
-                      {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
-                        <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
-                      ) : null}
-                    </div>
-                    {isTap && s.enabled ? (
-                      <input className='no-print' type='text' value={s.desc||''} onChange={e=>updateService(i,'desc',e.target.value)}
-                        placeholder={tapPlaceholder}
-                        style={{ marginTop:4, fontSize:12, padding:'3px 8px', borderRadius:4, background:'#0a1e32', color:'#fff', border:'1px solid #223', width:'100%', boxSizing:'border-box' }} />
-                    ) : null}
+                <React.Fragment key={group.label}>
+                  <div className='no-print' style={{ padding:'5px 0 3px', color:GOLD, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', borderBottom:`1px solid ${GOLD}33`, marginTop:6 }}>
+                    {group.label}
                   </div>
-                  <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
-                  <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
-                  <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
-                </div>
+                  {entries.map(({ s, i }) => {
+                    // Water Heater Replacement — Garage + Attic sub-rows
+                    if (s.id === 'wh_replacement') {
+                      const whTotal = s.enabled ? (s.garageQty||0)*(s.garageUnit||0)+(s.atticQty||0)*(s.atticUnit||0) : 0
+                      return (
+                        <div key={s.id} className='no-print' style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                            <input type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                            <span style={{ flex:1 }}>{s.name}</span>
+                            <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(whTotal)}</div>
+                          </div>
+                          {s.enabled && (
+                            <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                              {[['Garage','garageQty','garageUnit'],['Attic','atticQty','atticUnit']].map(([label,qKey,uKey])=>(
+                                <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                  <span style={{ color:'#9fb0c6', fontSize:12, width:52, flexShrink:0 }}>{label}</span>
+                                  <input type='number' value={s[qKey]||0} onChange={e=>updateService(i,qKey,Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
+                                  <input type='text' value={formatMoneyInput(s[uKey]||0)} onChange={e=>updateService(i,uKey,parseMoneyInput(e.target.value))} style={{ width:100 }} placeholder='Price/unit' />
+                                  <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s[qKey]||0)*(s[uKey]||0))}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    // Standard row (with optional desc field for water_tap / sewer_tap)
+                    const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
+                    const tapPlaceholder = s.id === 'water_tap' ? 'Distance (e.g. 150 ft from meter)' : 'Depth (e.g. 8 ft deep)'
+                    return (
+                      <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)', flexWrap: isTap ? 'wrap' : undefined }}>
+                        <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                        <div style={{ flex:1, minWidth: isTap ? 160 : undefined }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                            <span>{s.name}</span>
+                            {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
+                              <div className='no-print' style={{ display:'flex', gap:2 }}>
+                                <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                                <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
+                              </div>
+                            ) : null}
+                            {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
+                              <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
+                            ) : null}
+                          </div>
+                          {isTap && s.enabled ? (
+                            <input className='no-print' type='text' value={s.desc||''} onChange={e=>updateService(i,'desc',e.target.value)}
+                              placeholder={tapPlaceholder}
+                              style={{ marginTop:4, fontSize:12, padding:'3px 8px', borderRadius:4, background:'#0a1e32', color:'#fff', border:'1px solid #223', width:'100%', boxSizing:'border-box' }} />
+                          ) : null}
+                        </div>
+                        <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
+                        <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                        <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
+                      </div>
+                    )
+                  })}
+                </React.Fragment>
               )
             })}
             <div style={{ textAlign:'right', marginTop:8, color:GOLD }}>Services total: {formatCurrency(servicesTotal)}</div>
