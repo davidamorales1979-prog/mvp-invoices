@@ -247,13 +247,13 @@ export default function AppNew(){
   const trialDaysLeft = subscription?.status === 'trialing' && subscription.trial_end
     ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
     : 0
-  const isAdmin = userRole === 'admin'
+  const isAdmin = userRole === 'admin' || userRole === 'owner'
   const isReadOnly = userRole === 'member' && docType === 'invoice'
 
   const fetchSavedDocs = useCallback(async () => {
     if (!user || !accountId) return
-    const col = userRole === 'admin' ? 'user_id' : 'created_by'
-    const val = userRole === 'admin' ? accountId : user.id
+    const col = isAdmin ? 'user_id' : 'created_by'
+    const val = isAdmin ? accountId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('*')
@@ -265,12 +265,12 @@ export default function AppNew(){
       return
     }
     setSavedDocs(data || [])
-  }, [user, accountId, userRole])
+  }, [user, accountId, isAdmin])
 
   const fetchScheduledDocs = useCallback(async () => {
     if (!user || !accountId) return
-    const col = userRole === 'admin' ? 'user_id' : 'created_by'
-    const val = userRole === 'admin' ? accountId : user.id
+    const col = isAdmin ? 'user_id' : 'created_by'
+    const val = isAdmin ? accountId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
@@ -279,7 +279,7 @@ export default function AppNew(){
       .order('scheduled_date', { ascending: true })
     if (error) { console.error('Supabase fetch scheduled docs error:', error); return }
     setAllScheduledDocs(data || [])
-  }, [user, accountId, userRole])
+  }, [user, accountId, isAdmin])
 
   const paymentAlerts = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
@@ -731,8 +731,8 @@ export default function AppNew(){
   }, [client, user, accountId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const docCol = userRole === 'admin' ? 'user_id' : 'created_by'
-    const docVal = userRole === 'admin' ? accountId : user?.id
+    const docCol = isAdmin ? 'user_id' : 'created_by'
+    const docVal = isAdmin ? accountId : user?.id
 
     async function getMaxRawCounter(){
       if (!user || !accountId) return null
@@ -813,7 +813,7 @@ export default function AppNew(){
       await Promise.all([loadLastDocument(), fetchSavedDocs()])
     }
     init()
-  }, [reset, fetchSavedDocs, user, accountId, userRole]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [reset, fetchSavedDocs, user, accountId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
@@ -913,7 +913,7 @@ export default function AppNew(){
         .limit(1)
 
       const { data, error } = user
-        ? (userRole === 'admin'
+        ? (isAdmin
             ? await query.eq('user_id', accountId || user.id)
             : await query.eq('created_by', user.id))
         : await query
@@ -2426,14 +2426,18 @@ function HelpPanel({ onClose }) {
     },
     {
       title: 'Adding Independent Services',
-      desc: 'Bill plumbing services like Sewer Line, Gas Riser, or Water Heater separately or roll them into the fixture base total.',
+      desc: 'Services are organized into five groups — Sewer, Water, Gas, Others, and Remodeling / Fixtures. Enable any service to add it as a line item.',
       steps: [
-        'Scroll to the Independent Services section.',
+        'Scroll to the Independent Services section — services are grouped by trade: Sewer, Water, Gas, Others, and Remodeling / Fixtures.',
+        'Sewer group includes: Sewer Line, Sewer Tap, Storm Drain, and Grease Trap.',
+        'Water group includes: Water Line Meter and Water Meter Tap.',
+        'Gas group includes: Temp Gas, Gas Riser, Underground Gas Line, and Gas System Indoor.',
+        'Others group includes: Water Heater (New Construction) and Water Heater Replacement (Garage and/or Attic — enter qty and unit price for each location separately).',
+        'Remodeling / Fixtures group includes: Fixture Replacement, Toilet Replacement, Kitchen Faucet Replacement, and Garbage Disposal Replacement.',
         'Check the box next to a service to enable it and enter quantity and unit price.',
-        'For New Construction, each base service (Water Line, Gas Indoor, Water Heater, Manablok) has a % Based / Independent toggle.',
-        '% Based includes the service in the base total and splits it across the 30/50/20 phase schedule.',
-        'Independent bills the service as a separate line item not subject to phase splitting.',
-        'All non-base services are always billed independently.',
+        'For New Construction, base services (Water Line, Gas Indoor, Water Heater, Manablok) have a % Based / Independent toggle.',
+        '% Based rolls the service into the base total and splits it across the 30/50/20 phase schedule. Independent bills it as a separate line item outside the phase split.',
+        'All Remodeling / Fixtures and tap services are always billed independently and appear on Service/Replacement documents.',
       ]
     },
     {
@@ -2471,6 +2475,21 @@ function HelpPanel({ onClose }) {
         'Red badges mean the payment is overdue; amber means due today; gold means upcoming.',
         'Click Mark Paid next to any phase when payment is received — this is recorded in the document history.',
         'An alert banner also appears at the top of the app whenever phases are overdue or due within 7 days.',
+      ]
+    },
+    {
+      title: 'Mileage Tracking & IRS Export',
+      desc: 'Log job-site trips per document and export an annual mileage report formatted for IRS Schedule C / Form 2106.',
+      steps: [
+        'Save a document first — the Mileage Log section appears below the document once it has been saved.',
+        'Click Log Trip to expand the entry form.',
+        'Enter the Origin, Destination, and Miles for the trip. The Purpose is automatically set to the client name.',
+        'Click Add Trip — the trip is saved and appears in the table below the form.',
+        'Click ✕ on any row to permanently delete that trip.',
+        'To see all trips across all jobs, open the Dashboard and scroll to the Mileage Tracking section.',
+        'Use the year selector in the Dashboard to switch between tax years.',
+        'Click Export PDF to generate a printable mileage log with the IRS standard rate ($0.70/mile), total miles, and estimated deduction.',
+        'The exported report includes every trip for that year and is labeled for Schedule C / Form 2106 use.',
       ]
     },
     {
@@ -2552,17 +2571,17 @@ function HelpPanel({ onClose }) {
       ]
     },
     {
-      title: 'Team Members',
-      desc: 'Invite your crew to FieldQuote. Team members can create and edit quotes and invoices but cannot delete documents, manage billing, or invite others.',
+      title: 'Team Members & Roles',
+      desc: 'Invite your crew to FieldQuote. There are two roles: Owner (full access) and Team Member (limited access). Invited users join free — no subscription required.',
       steps: [
-        'Click Settings in the toolbar — the Team section appears at the bottom (admin only).',
-        'Enter a team member\'s email address and click Invite.',
-        'A unique invite link is generated — click Copy and send it to them by text or email.',
-        'The invited person opens the link, signs in or creates a free account, and clicks Accept Invite.',
-        'Once accepted, their status changes from Pending to Active in your Team list.',
-        'Active members see all the same quotes and invoices as the admin account.',
-        'Members cannot delete documents, access billing, or manage team members.',
-        'To remove a team member, click Remove next to their name. Their account reverts to an independent FieldQuote account.',
+        'Click Settings in the toolbar — the Team section appears at the bottom (Owner only).',
+        'Enter a team member\'s email address and click Invite — an invitation email is sent to them automatically.',
+        'The invited person clicks the link in the email, signs in or creates a free account, and is added to your team instantly.',
+        'Team Members bypass the Stripe payment screen — they never need a subscription of their own.',
+        'Owners have full access: create/edit/delete documents, manage billing, invite and remove team members.',
+        'Team Members can create and edit quotes and invoices and log their own mileage, but cannot delete documents, access billing, or invite others.',
+        'Active members share the same document pool — all quotes and invoices are visible to everyone on the team.',
+        'To remove a team member, click Remove next to their name in the Team list. Their account becomes an independent FieldQuote account.',
       ]
     },
   ]

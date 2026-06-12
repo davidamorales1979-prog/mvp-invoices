@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (callerProfile?.role !== 'admin') {
+    if (callerProfile?.role !== 'admin' && callerProfile?.role !== 'owner') {
       return new Response(JSON.stringify({ error: 'Only account admins can invite team members.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
       })
