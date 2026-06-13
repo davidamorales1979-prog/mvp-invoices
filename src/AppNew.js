@@ -106,6 +106,7 @@ export default function AppNew(){
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [profile, setProfile] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileChecked, setProfileChecked] = useState(false)
@@ -379,6 +380,10 @@ export default function AppNew(){
 
   async function signUp(){
     setAuthMessage('')
+    if (!agreedToTerms) {
+      setAuthMessage('Please agree to the Terms of Service and Privacy Policy to create an account.')
+      return
+    }
     const { error } = await supabase.auth.signUp({ email, password })
     if (error) {
       setAuthMessage(error.message)
@@ -1105,10 +1110,20 @@ export default function AppNew(){
             <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Password</label>
             <input type='password' value={password} onChange={e=>setPassword(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
           </div>
-          {authMessage ? <div style={{ color:GOLD, marginBottom:12 }}>{authMessage}</div> : null}
+          <div style={{ marginBottom:14, display:'flex', alignItems:'flex-start', gap:10 }}>
+            <input type='checkbox' id='agreeTerms' checked={agreedToTerms} onChange={e=>setAgreedToTerms(e.target.checked)} style={{ marginTop:3, accentColor:GOLD, flexShrink:0, width:15, height:15, cursor:'pointer' }} />
+            <label htmlFor='agreeTerms' style={{ color:'#9fb0c6', fontSize:12, lineHeight:1.5, cursor:'pointer' }}>
+              I agree to the{' '}
+              <a href='/terms' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Terms of Service</a>
+              {' '}and{' '}
+              <a href='/privacy' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Privacy Policy</a>
+              {' '}(required for Sign Up)
+            </label>
+          </div>
+          {authMessage ? <div style={{ color:GOLD, marginBottom:12, fontSize:13 }}>{authMessage}</div> : null}
           <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
             <button onClick={signIn} style={{ flex:1, padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none' }}>Sign In</button>
-            <button onClick={signUp} style={{ flex:1, padding:10, borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}` }}>Sign Up</button>
+            <button onClick={signUp} style={{ flex:1, padding:10, borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, opacity: agreedToTerms ? 1 : 0.55 }}>Sign Up</button>
           </div>
         </div>
       </div>
@@ -1783,8 +1798,10 @@ export default function AppNew(){
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
           </div>
         </footer>
-        <div className='no-print' style={{ marginTop:10, textAlign:'center', color:'#3a4f63', fontSize:11 }}>
-          © 2026 {profileCompany || 'MVP Solutions'}. All rights reserved.
+        <div className='no-print' style={{ marginTop:10, textAlign:'center', color:'#3a4f63', fontSize:11, display:'flex', justifyContent:'center', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+          <span>© 2026 {profileCompany || 'MVP Solutions'}. All rights reserved.</span>
+          <a href='/terms' style={{ color:'#5a7a96', textDecoration:'none', borderBottom:'1px solid #334' }}>Terms of Service</a>
+          <a href='/privacy' style={{ color:'#5a7a96', textDecoration:'none', borderBottom:'1px solid #334' }}>Privacy Policy</a>
         </div>
         </div>
 
