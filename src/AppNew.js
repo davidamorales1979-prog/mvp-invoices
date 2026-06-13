@@ -1781,8 +1781,11 @@ export default function AppNew(){
           <div style={{ display:'flex', gap:8 }}>
             <button onClick={newNumber} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>New Number</button>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
-          </div> 
+          </div>
         </footer>
+        <div className='no-print' style={{ marginTop:10, textAlign:'center', color:'#3a4f63', fontSize:11 }}>
+          © 2026 {profileCompany || 'MVP Solutions'}. All rights reserved.
+        </div>
         </div>
 
         <div className='print-only'>
@@ -1954,6 +1957,7 @@ export default function AppNew(){
               <div>Payment due upon receipt</div>
               <div>{contractor}</div>
               <div style={{ fontSize:10, opacity:0.45, marginTop:6, letterSpacing:'0.5px' }}>Generated with FieldQuote</div>
+              <div style={{ fontSize:10, opacity:0.55, marginTop:4, letterSpacing:'0.3px' }}>© 2026 {profileCompany || 'MVP Solutions'}. All rights reserved.</div>
             </div>
 
             {includePhotos && clientPhotos.length > 0 ? (
