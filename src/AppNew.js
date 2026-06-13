@@ -173,10 +173,14 @@ export default function AppNew(){
   const [signerName, setSignerName] = useState('')
   const [showSigModal, setShowSigModal] = useState(false)
   const [sigRequestLoading, setSigRequestLoading] = useState(false)
+  const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false)
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState(null)
+  const [paymentLinkLoading, setPaymentLinkLoading] = useState(false)
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
   const joinToken = useMemo(() => new URLSearchParams(window.location.search).get('join'), [])
+  const paymentToken = useMemo(() => new URLSearchParams(window.location.search).get('payment'), [])
 
   const contractorNames = [profile?.name1, profile?.name2, profile?.name3].filter(Boolean)
   const defaultContractor = contractorNames[0] || profile?.company_name || 'MVP Solutions'
@@ -376,6 +380,47 @@ export default function AppNew(){
     }
     setSigRequestLoading(false)
     setShowSigModal(true)
+  }
+
+  async function generatePaymentLink() {
+    if (!savedDocId) {
+      const saved = await persistDocument()
+      if (!saved) return
+      await fetchSavedDocs()
+    }
+
+    // Reuse existing link if already generated (stored in history)
+    const existingLink = history.find(h => h.entry === 'payment_link_created')
+    if (existingLink?.url) {
+      setPaymentLinkUrl(existingLink.url)
+      setShowPaymentLinkModal(true)
+      return
+    }
+
+    setPaymentLinkLoading(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
+        body: {
+          doc_id: savedDocId,
+          amount_cents: Math.round(displayTotal * 100),
+          doc_number: docNumber,
+          client_name: client,
+        }
+      })
+      if (error || !data?.url) throw new Error(error?.message || 'No payment link returned')
+
+      const entry = { ts: new Date().toISOString(), entry: 'payment_link_created', status, docNumber, url: data.url }
+      const newHistory = [entry, ...history]
+      setHistory(newHistory)
+      persistDocument({ history: newHistory })
+
+      setPaymentLinkUrl(data.url)
+      setShowPaymentLinkModal(true)
+    } catch (e) {
+      alert('Could not create payment link: ' + e.message)
+    } finally {
+      setPaymentLinkLoading(false)
+    }
   }
 
   async function signUp(){
@@ -599,6 +644,8 @@ export default function AppNew(){
     setSignatureData(data.signature_data ?? null)
     setSignedAt(data.signed_at ?? null)
     setSignerName(data.signer_name ?? '')
+    const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
+    setPaymentLinkUrl(savedLink?.url ?? null)
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
@@ -810,6 +857,8 @@ export default function AppNew(){
       setSignatureData(data.signature_data ?? null)
       setSignedAt(data.signed_at ?? null)
       setSignerName(data.signer_name ?? '')
+      const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
+      setPaymentLinkUrl(savedLink?.url ?? null)
     }
 
     async function init() {
@@ -978,6 +1027,8 @@ export default function AppNew(){
     setSignedAt(null)
     setSignerName('')
     setShowSigModal(false)
+    setShowPaymentLinkModal(false)
+    setPaymentLinkUrl(null)
     pushHistory('reset:number')
   }
 
@@ -1085,6 +1136,7 @@ export default function AppNew(){
 
   if (signToken) return <SignaturePage token={signToken} />
   if (joinToken) return <JoinPage token={joinToken} user={user} authLoading={authLoading} />
+  if (paymentToken === 'success') return <PaymentThankYouPage />
 
   if (authLoading || (user && !profileChecked)) {
     return (
@@ -1285,6 +1337,12 @@ export default function AppNew(){
               style={{ background: signedAt ? '#1a3d1a' : showSigModal ? GOLD : '#0f2740', color: signedAt ? '#4caf50' : showSigModal ? NAVY : '#fff', border:`1px solid ${signedAt ? '#4caf50' : GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
               {sigRequestLoading ? '…' : signedAt ? '✓ Signed' : '✍ Signature'}
             </button>
+            {docType === 'invoice' && (
+              <button onClick={generatePaymentLink} disabled={paymentLinkLoading}
+                style={{ background: showPaymentLinkModal ? GOLD : '#0f2740', color: showPaymentLinkModal ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
+                {paymentLinkLoading ? '…' : '$ Pay Link'}
+              </button>
+            )}
             <button onClick={signOut} style={{ background:'#7a0a0a', color:'#fff', padding:8, borderRadius:6, border:`1px solid ${GOLD}` }}>Logout</button>
             <span className='toolbar-email' style={{ color:'#9fb0c6' }}>{user?.email}</span>
           </div>
@@ -1336,6 +1394,33 @@ export default function AppNew(){
                   The client opens the link, sees the {docType} summary, draws their signature with a finger, and submits. The signed copy will appear here automatically.
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {showPaymentLinkModal && docType === 'invoice' && (
+          <div className='no-print' style={{ marginTop:12, background:'#041827', borderRadius:10, padding:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <h4 style={{ color:GOLD, margin:0 }}>Payment Link</h4>
+              <button onClick={()=>setShowPaymentLinkModal(false)} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+            </div>
+            <div style={{ color:'#9fb0c6', marginBottom:12, fontSize:14 }}>
+              Send this link to <strong style={{ color:'#fff' }}>{client || 'your client'}</strong> so they can pay <strong style={{ color:GOLD }}>{formatCurrency(displayTotal)}</strong> securely online:
+            </div>
+            <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+              <input readOnly value={paymentLinkUrl || ''}
+                style={{ flex:1, minWidth:200, padding:10, borderRadius:6, border:'1px solid #334', background:'#0a1e32', color:'#9fb0c6', fontSize:13 }} />
+              <button
+                onClick={() => navigator.clipboard.writeText(paymentLinkUrl).then(() => setSaveMessage('Payment link copied!'))}
+                style={{ background:GOLD, color:NAVY, border:'none', padding:'10px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                Copy Link
+              </button>
+            </div>
+            <div style={{ marginTop:10, color:'#7f98b0', fontSize:12 }}>
+              The client clicks the link, enters their card details, and pays securely via Stripe. This invoice will be marked Paid automatically once payment clears.
+            </div>
+            {history.find(h => h.entry === 'paid:stripe') && (
+              <div style={{ marginTop:10, color:'#4caf50', fontWeight:700, fontSize:14 }}>✓ Payment received via Stripe</div>
             )}
           </div>
         )}
@@ -1991,6 +2076,21 @@ export default function AppNew(){
           </div>
         </div>
 
+      </div>
+    </div>
+  )
+}
+
+function PaymentThankYouPage() {
+  return (
+    <div style={{ minHeight:'100vh', background:'#0a1628', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, fontFamily:'sans-serif' }}>
+      <div style={{ textAlign:'center', maxWidth:440 }}>
+        <div style={{ fontSize:56, marginBottom:16, color:'#4caf50' }}>✓</div>
+        <h1 style={{ color:'#4caf50', fontSize:26, marginBottom:10, fontWeight:700 }}>Payment Received!</h1>
+        <p style={{ color:'#9fb0c6', fontSize:16, lineHeight:1.6, margin:0 }}>
+          Thank you for your payment. Your contractor will be notified and your invoice has been marked as paid.
+        </p>
+        <p style={{ color:'#556a80', fontSize:12, marginTop:20 }}>Powered by FieldQuote &amp; Stripe</p>
       </div>
     </div>
   )

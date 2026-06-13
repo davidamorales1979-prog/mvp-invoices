@@ -83,9 +83,48 @@ Deno.serve(async (req) => {
 
     switch (event.type) {
 
-      // Checkout completed — subscription created via Stripe Checkout
+      // Checkout completed — subscription OR one-time invoice payment
       case 'checkout.session.completed': {
         const session = event.data.object
+
+        // One-time invoice payment via "Send Payment Link"
+        if (session.mode === 'payment') {
+          const docId = session.metadata?.doc_id
+          if (!docId) {
+            console.log('checkout.session.completed (payment): no doc_id in metadata, skipping')
+            break
+          }
+          const { data: doc, error: docErr } = await supabase
+            .from('documents')
+            .select('history, status, doc_number')
+            .eq('id', docId)
+            .maybeSingle()
+          if (docErr || !doc) {
+            console.error('checkout.session.completed (payment): doc not found', docId, docErr?.message)
+            break
+          }
+          const paidEntry = {
+            ts: new Date().toISOString(),
+            entry: 'paid:stripe',
+            status: 'paid',
+            docNumber: doc.doc_number,
+            amount_cents: session.amount_total,
+            payment_intent: session.payment_intent,
+          }
+          const newHistory = [paidEntry, ...(doc.history || [])]
+          const { error: updateErr } = await supabase
+            .from('documents')
+            .update({ history: newHistory, status: 'paid' })
+            .eq('id', docId)
+          if (updateErr) {
+            console.error('checkout.session.completed (payment): failed to update doc', updateErr.message)
+          } else {
+            console.log(`checkout.session.completed (payment): doc ${docId} marked paid`)
+          }
+          break
+        }
+
+        // Subscription checkout
         if (session.mode !== 'subscription') break
         if (!session.subscription) {
           console.error('checkout.session.completed: missing subscription ID')

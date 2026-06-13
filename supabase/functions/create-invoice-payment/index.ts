@@ -1,0 +1,80 @@
+// @ts-nocheck
+import Stripe from 'https://esm.sh/stripe@14.21.0?target=deno'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2?target=deno'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } },
+    )
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+
+    const { doc_id, amount_cents, doc_number, client_name } = await req.json()
+
+    if (!doc_id || !amount_cents || amount_cents <= 0) {
+      return new Response(JSON.stringify({ error: 'Missing required fields: doc_id and amount_cents' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      })
+    }
+
+    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
+      apiVersion: '2024-06-20',
+      httpClient: Stripe.createFetchHttpClient(),
+    })
+
+    const appUrl = Deno.env.get('APP_URL') ?? 'https://mvp-invoices.vercel.app'
+
+    // Expires 30 days from now (Stripe max for checkout sessions)
+    const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: amount_cents,
+          product_data: {
+            name: `${doc_number} — ${client_name || 'Invoice'}`,
+            description: 'Plumbing services — FieldQuote',
+          },
+        },
+      }],
+      metadata: { doc_id },
+      expires_at: expiresAt,
+      success_url: `${appUrl}/?payment=success`,
+      cancel_url: `${appUrl}/`,
+    })
+
+    return new Response(JSON.stringify({ url: session.url, session_id: session.id }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    })
+  } catch (err) {
+    console.error('create-invoice-payment error:', err.message)
+    return new Response(JSON.stringify({ error: err.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+    })
+  }
+})
