@@ -28,11 +28,13 @@ const SERVICES = [
   { id: 'gas_underground', name: 'Underground Gas Line',       unit: 0 },
   { id: 'gas_indoor',   name: 'Gas System Indoor',             unit: 300 },
   // Others
-  { id: 'water_heater', name: 'Water Heater',                  unit: 600 },
-  { id: 'wh_replacement', name: 'Water Heater Replacement',   unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
-  { id: 'manablok',     name: 'Manablok System',               unit: 950 },
-  { id: 'repiping',     name: 'Repiping',                      unit: 1500 },
-  { id: 'cut_bust',     name: 'Cut and Bust Concrete',         unit: 200 },
+  { id: 'water_heater',    name: 'Water Heater',                  unit: 600 },
+  { id: 'tankless_wh',     name: 'Tankless Water Heater',         unit: 0 },
+  { id: 'recirc_pump',     name: 'Recirculation Pump System',     unit: 0 },
+  { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
+  { id: 'manablok',        name: 'Manablok System',               unit: 950 },
+  { id: 'repiping',        name: 'Repiping',                      unit: 1500 },
+  { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
   // Remodeling / Fixtures
   { id: 'fixture_replace',    name: 'Fixture Replacement',            unit: 0 },
   { id: 'toilet_replace',     name: 'Toilet Replacement',             unit: 0 },
@@ -44,11 +46,11 @@ const SERVICE_GROUPS = [
   { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease'] },
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
-  { label: 'Others',               ids: ['water_heater', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
+  { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
   { label: 'Remodeling / Fixtures', ids: ['fixture_replace', 'toilet_replace', 'kitchen_faucet', 'garbage_disposal'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'manablok', 'gas_indoor']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -2432,7 +2434,7 @@ function HelpPanel({ onClose }) {
         'Sewer group includes: Sewer Line, Sewer Tap, Storm Drain, and Grease Trap.',
         'Water group includes: Water Line Meter and Water Meter Tap.',
         'Gas group includes: Temp Gas, Gas Riser, Underground Gas Line, and Gas System Indoor.',
-        'Others group includes: Water Heater (New Construction) and Water Heater Replacement (Garage and/or Attic — enter qty and unit price for each location separately).',
+        'Others group includes: Water Heater, Tankless Water Heater, Recirculation Pump System (all with % Based / Independent toggle), and Water Heater Replacement (Garage and/or Attic — enter qty and unit price for each location separately).',
         'Remodeling / Fixtures group includes: Fixture Replacement, Toilet Replacement, Kitchen Faucet Replacement, and Garbage Disposal Replacement.',
         'Check the box next to a service to enable it and enter quantity and unit price.',
         'For New Construction, base services (Water Line, Gas Indoor, Water Heater, Manablok) have a % Based / Independent toggle.',
