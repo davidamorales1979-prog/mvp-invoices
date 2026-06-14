@@ -206,6 +206,7 @@ export default function AppNew(){
   const [blueprintResults, setBlueprintResults] = useState(null)
   const [blueprintReviewItems, setBlueprintReviewItems] = useState([])
   const [blueprintError, setBlueprintError] = useState('')
+  const [waterFixtureUnitPrice, setWaterFixtureUnitPrice] = useState(0)
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
@@ -1504,6 +1505,13 @@ export default function AppNew(){
     }
   }
 
+  const WATER_FIX_IDS = new Set(SERVICE_GROUPS.find(g => g.label === 'Water Fixtures')?.ids || [])
+
+  function setAllWaterFixtureUnit(val) {
+    setWaterFixtureUnitPrice(val)
+    setServices(prev => prev.map(s => WATER_FIX_IDS.has(s.id) ? { ...s, unit: val } : s))
+  }
+
   function applyBlueprintToQuote() {
     const toApply = blueprintReviewItems.filter(item => item.include && item.confirmed_qty > 0)
     setServices(prev => {
@@ -1514,13 +1522,16 @@ export default function AppNew(){
         if (idx === -1) return
         const svc = updated[idx]
         if (item.service_id === 'wh_replacement') {
-          updated[idx] = { ...svc, enabled: true, garageQty: item.confirmed_qty, garageUnit: svc.garageUnit || 0, atticQty: svc.atticQty || 0, atticUnit: svc.atticUnit || 0 }
+          updated[idx] = { ...svc, enabled: true, garageQty: item.confirmed_qty, garageUnit: 0, atticQty: svc.atticQty || 0, atticUnit: 0 }
         } else {
-          updated[idx] = { ...svc, enabled: true, qty: item.confirmed_qty }
+          // Quantities only — never pre-fill prices
+          updated[idx] = { ...svc, enabled: true, qty: item.confirmed_qty, unit: 0 }
         }
       })
       return updated
     })
+    // Reset shared water fixture price to signal "enter price fresh"
+    setWaterFixtureUnitPrice(0)
     // Items without a service_id become add-ons
     const extras = toApply.filter(item => !item.service_id)
     if (extras.length > 0) {
@@ -1532,7 +1543,7 @@ export default function AppNew(){
     setBlueprintReviewItems([])
     setBlueprintStep('upload')
     const count = toApply.length
-    setSaveMessage(`Blueprint applied — ${count} item${count !== 1 ? 's' : ''} added. Enter prices to complete your quote.`)
+    setSaveMessage(`Blueprint applied — ${count} item${count !== 1 ? 's' : ''} added. Enter Price / Fixture to calculate totals.`)
   }
 
   function handleQuickSaved(savedDoc) {
@@ -2161,8 +2172,18 @@ export default function AppNew(){
                 .filter(Boolean)
               return (
                 <React.Fragment key={group.label}>
-                  <div className='no-print' style={{ padding:'5px 0 3px', color:GOLD, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', borderBottom:`1px solid ${GOLD}33`, marginTop:6 }}>
-                    {group.label}
+                  <div className='no-print' style={{ padding:'5px 0 3px', borderBottom:`1px solid ${GOLD}33`, marginTop:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ color:GOLD, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'1px' }}>{group.label}</span>
+                    {group.label === 'Water Fixtures' && (
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ color:'#7f98b0', fontSize:10, whiteSpace:'nowrap' }}>Price / Fixture</span>
+                        <input type='text'
+                          value={formatMoneyInput(waterFixtureUnitPrice)}
+                          onChange={e => setAllWaterFixtureUnit(parseMoneyInput(e.target.value))}
+                          placeholder='$0'
+                          style={{ width:88, padding:'2px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, fontSize:12, fontWeight:700, textAlign:'right' }} />
+                      </div>
+                    )}
                   </div>
                   {entries.map(({ s, i }) => {
                     // Water Heater Replacement — Garage + Attic sub-rows
