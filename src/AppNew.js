@@ -165,7 +165,8 @@ export default function AppNew(){
   const [showSettings, setShowSettings] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showQuickEstimate, setShowQuickEstimate] = useState(false)
-  const signToken = useMemo(() => new URLSearchParams(window.location.search).get('sign'), [])
+  const signToken       = useMemo(() => new URLSearchParams(window.location.search).get('sign'), [])
+  const optionsQueryToken = useMemo(() => new URLSearchParams(window.location.search).get('options'), [])
   const [signatureToken, setSignatureToken] = useState(null)
   const [signatureData, setSignatureData] = useState(null)
   const [signedAt, setSignedAt] = useState(null)
@@ -176,6 +177,12 @@ export default function AppNew(){
   const [paymentLinkUrl, setPaymentLinkUrl] = useState(null)
   const [paymentLinkLoading, setPaymentLinkLoading] = useState(false)
   const [clientEmail, setClientEmail] = useState('')
+  const [clientPhone, setClientPhone] = useState('')
+  const [quoteOptions, setQuoteOptions] = useState(null)
+  const [selectedOptionIdx, setSelectedOptionIdx] = useState(null)
+  const [optionsToken, setOptionsToken] = useState(null)
+  const [showOptionsModal, setShowOptionsModal] = useState(false)
+  const [showOptionsEditor, setShowOptionsEditor] = useState(false)
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
@@ -651,6 +658,10 @@ export default function AppNew(){
     const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
     setPaymentLinkUrl(savedLink?.url ?? null)
     setClientEmail(data.client_email ?? '')
+    setClientPhone(data.client_phone ?? '')
+    setQuoteOptions(data.quote_options ?? null)
+    setSelectedOptionIdx(data.selected_option_idx ?? null)
+    setOptionsToken(data.options_token ?? null)
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
@@ -915,6 +926,10 @@ export default function AppNew(){
       signed_at: signedAt,
       signer_name: signerName || null,
       client_email: clientEmail || null,
+      client_phone: clientPhone || null,
+      quote_options: quoteOptions || null,
+      selected_option_idx: selectedOptionIdx ?? null,
+      options_token: optionsToken || null,
       ...overrides
     }
 
@@ -1299,24 +1314,145 @@ export default function AppNew(){
 
   async function markDocumentPaid() {
     setDocStatus('paid')
-    if (clientEmail) {
-      try {
-        await supabase.functions.invoke('send-client-email', {
-          body: {
-            type: 'payment_receipt',
-            to: clientEmail,
-            client_name: client,
-            doc_number: docNumber,
-            total: displayTotal,
-            contractor_name: contractor,
-            company_name: profileCompany || contractor,
-          }
-        })
-        setSaveMessage(`Payment receipt sent to ${clientEmail}`)
-      } catch (e) {
-        console.error('receipt email failed:', e)
-      }
+    const smsBody = {
+      type: 'payment_received',
+      client_name: client || 'Valued Client',
+      doc_number: docNumber,
+      total: displayTotal,
+      contractor_name: contractor,
+      company_name: profileCompany || contractor,
     }
+    await Promise.allSettled([
+      clientEmail
+        ? supabase.functions.invoke('send-client-email', {
+            body: {
+              type: 'payment_receipt',
+              to: clientEmail,
+              client_name: client || 'Valued Client',
+              doc_number: docNumber,
+              total: displayTotal,
+              contractor_name: contractor,
+              company_name: profileCompany || contractor,
+            }
+          }).then(() => setSaveMessage(`Payment receipt sent to ${clientEmail}`))
+          .catch(e => console.error('receipt email failed:', e))
+        : Promise.resolve(),
+      clientPhone
+        ? supabase.functions.invoke('send-client-sms', { body: { ...smsBody, to: clientPhone } })
+            .then(() => setSaveMessage(m => m ? m + ' + SMS sent' : `Payment SMS sent to ${clientPhone}`))
+            .catch(e => console.error('receipt SMS failed:', e))
+        : Promise.resolve(),
+    ])
+  }
+
+  async function sendOnMyWay() {
+    if (!clientPhone) {
+      setSaveMessage('Add a client phone number to send SMS notifications.')
+      return
+    }
+    setSaveMessage('Sending SMS…')
+    try {
+      const { error } = await supabase.functions.invoke('send-client-sms', {
+        body: {
+          type: 'on_my_way',
+          to: clientPhone,
+          client_name: client || 'Valued Client',
+          contractor_name: contractor,
+          company_name: profileCompany || contractor,
+          address,
+          scheduled_date: scheduleDate || null,
+        }
+      })
+      if (error) throw new Error(error.message)
+      setSaveMessage(`"On My Way" SMS sent to ${clientPhone}`)
+    } catch (e) {
+      setSaveMessage('SMS failed: ' + e.message)
+    }
+  }
+
+  function openOptionsEditor() {
+    if (!quoteOptions) {
+      const enabled = services.filter(s => s.enabled && (
+        s.id === 'wh_replacement' ? (s.garageQty||0) + (s.atticQty||0) > 0 : (s.qty||0) > 0
+      ))
+      const all = enabled.map(s => ({ id: s.id, name: s.name }))
+      const h = Math.ceil(all.length / 2)
+      const t = Math.ceil(all.length * 2 / 3)
+      setQuoteOptions([
+        { label: 'Basic',    description: '', notes: '', total: 0, services: all.slice(0, h) },
+        { label: 'Standard', description: '', notes: '', total: 0, services: all.slice(0, t) },
+        { label: 'Premium',  description: '', notes: '', total: 0, services: all },
+      ])
+    }
+    setShowOptionsEditor(true)
+  }
+
+  function updateOption(idx, field, value) {
+    setQuoteOptions(prev => prev.map((opt, i) => i === idx ? { ...opt, [field]: value } : opt))
+  }
+
+  function toggleOptionService(optIdx, serviceId, serviceName, checked) {
+    setQuoteOptions(prev => prev.map((opt, i) => {
+      if (i !== optIdx) return opt
+      const svcs = opt.services || []
+      return {
+        ...opt,
+        services: checked
+          ? [...svcs, { id: serviceId, name: serviceName }]
+          : svcs.filter(s => s.id !== serviceId),
+      }
+    }))
+  }
+
+  async function saveOptions() {
+    if (!quoteOptions?.length) return
+    let docId = savedDocId
+    if (!docId) {
+      docId = await persistDocument()
+      if (!docId) return
+    }
+    let token = optionsToken
+    if (!token) {
+      token = crypto.randomUUID()
+      setOptionsToken(token)
+    }
+    const { error } = await supabase.from('documents')
+      .update({ quote_options: quoteOptions, options_token: token, selected_option_idx: null })
+      .eq('id', docId).eq('user_id', accountId || user.id)
+    if (error) { setSaveMessage('Failed to save options: ' + error.message); return }
+    setSelectedOptionIdx(null)
+    setShowOptionsEditor(false)
+    setShowOptionsModal(true)
+    setSaveMessage('Options saved! Share the link with your client.')
+  }
+
+  async function refreshOptionsStatus() {
+    if (!savedDocId) return
+    const { data } = await supabase.from('documents')
+      .select('selected_option_idx, quote_options').eq('id', savedDocId).maybeSingle()
+    if (data) {
+      setSelectedOptionIdx(data.selected_option_idx ?? null)
+      if (data.quote_options) setQuoteOptions(data.quote_options)
+      const sel = data.selected_option_idx
+      setSaveMessage(sel != null && data.quote_options?.[sel]
+        ? `Client selected: ${data.quote_options[sel].label}`
+        : 'No selection yet — client has not chosen.')
+    }
+  }
+
+  async function applySelectedOption() {
+    if (selectedOptionIdx == null || !quoteOptions?.[selectedOptionIdx]) return
+    const opt = quoteOptions[selectedOptionIdx]
+    const entry = { ts: new Date().toISOString(), entry: `option_selected:${opt.label}`, status, docNumber }
+    const newHistory = [entry, ...history]
+    const note = `Client selected: ${opt.label} — ${formatCurrency(opt.total)}${opt.description ? ' — ' + opt.description : ''}`
+    const newNotes = notes ? `${notes}\n\n${note}` : note
+    setHistory(newHistory)
+    setNotes(newNotes)
+    setStatus('approved')
+    await persistDocument({ history: newHistory, notes: newNotes, status: 'approved' })
+    setSaveMessage(`Applied: client's ${opt.label} selection recorded`)
+    setShowOptionsModal(false)
   }
 
   function handleQuickSaved(savedDoc) {
@@ -1327,7 +1463,8 @@ export default function AppNew(){
     setSaveMessage('Quick estimate saved!')
   }
 
-  if (signToken) return <SignaturePage token={signToken} />
+  if (signToken)        return <SignaturePage token={signToken} />
+  if (optionsQueryToken) return <OptionsSelectionPage token={optionsQueryToken} />
   if (joinToken) return <JoinPage token={joinToken} user={user} authLoading={authLoading} />
   if (paymentToken === 'success') return <PaymentThankYouPage />
 
@@ -1593,6 +1730,15 @@ export default function AppNew(){
             <button onClick={() => setActiveView('schedule')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>📅 Schedule</button>
             <button onClick={() => setActiveView('clients')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>👤 Clients</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
+            <button onClick={sendOnMyWay} title={clientPhone ? `SMS ${clientPhone}` : 'Add a client phone number to enable'} style={{ background: clientPhone ? '#0f2740' : '#07111e', color: clientPhone ? '#fff' : '#445', border:`1px solid ${clientPhone ? GOLD : '#334'}`, padding:8, borderRadius:6, cursor: clientPhone ? 'pointer' : 'default' }}>📍 On My Way</button>
+            {docType === 'quote' && (
+              <button
+                onClick={() => quoteOptions?.length ? setShowOptionsModal(true) : openOptionsEditor()}
+                title="Create multiple pricing options for the client to choose from"
+                style={{ background: selectedOptionIdx != null ? '#1a3d1a' : quoteOptions?.length ? '#0d2b1a' : '#0f2740', color: selectedOptionIdx != null ? '#4caf50' : quoteOptions?.length ? '#4caf50' : '#fff', border:`1px solid ${selectedOptionIdx != null ? '#4caf50' : quoteOptions?.length ? '#4caf50' : GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
+                {selectedOptionIdx != null ? '✓ Option Chosen' : '◈ Options'}
+              </button>
+            )}
             <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
             <button onClick={() => setActiveView('help')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>❓ Help</button>
@@ -1689,6 +1835,59 @@ export default function AppNew(){
           </div>
         )}
 
+        {showOptionsModal && quoteOptions?.length > 0 && (
+          <div className='no-print' style={{ marginTop:12, background:'#041827', borderRadius:10, padding:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+              <h4 style={{ color:GOLD, margin:0 }}>◈ Multi-Option Quote</h4>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => { setShowOptionsModal(false); openOptionsEditor() }}
+                  style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:13 }}>Edit Options</button>
+                <button onClick={() => setShowOptionsModal(false)}
+                  style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:13 }}>✕ Close</button>
+              </div>
+            </div>
+
+            {selectedOptionIdx != null && quoteOptions[selectedOptionIdx] ? (
+              <div>
+                <div style={{ background:'#1a3d1a', border:'1px solid #4caf50', borderRadius:8, padding:'14px 16px', marginBottom:14, display:'flex', alignItems:'center', gap:12 }}>
+                  <span style={{ fontSize:24 }}>✅</span>
+                  <div>
+                    <div style={{ color:'#4caf50', fontWeight:700, fontSize:16 }}>Client Selected: {quoteOptions[selectedOptionIdx].label}</div>
+                    <div style={{ color:'#9fb0c6', fontSize:14, marginTop:2 }}>{formatCurrency(quoteOptions[selectedOptionIdx].total)}{quoteOptions[selectedOptionIdx].description ? ` — ${quoteOptions[selectedOptionIdx].description}` : ''}</div>
+                  </div>
+                </div>
+                <button onClick={applySelectedOption} style={{ background:GOLD, color:NAVY, border:'none', padding:'11px 0', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:14, width:'100%', marginBottom:8 }}>
+                  Apply This Selection to Quote
+                </button>
+                <div style={{ color:'#7f98b0', fontSize:12, textAlign:'center' }}>Updates notes, marks quote as approved, and saves.</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ color:'#9fb0c6', marginBottom:12, fontSize:14 }}>
+                  Share this link with <strong style={{ color:'#fff' }}>{client || 'your client'}</strong> so they can view all options and choose one:
+                </div>
+                <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:12 }}>
+                  <input readOnly value={`${window.location.origin}/?options=${optionsToken}`}
+                    style={{ flex:1, minWidth:200, padding:10, borderRadius:6, border:'1px solid #334', background:'#0a1e32', color:'#9fb0c6', fontSize:13 }} />
+                  <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/?options=${optionsToken}`).then(()=>setSaveMessage('Options link copied!'))}
+                    style={{ background:GOLD, color:NAVY, border:'none', padding:'10px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                    Copy Link
+                  </button>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <button onClick={refreshOptionsStatus} style={{ background:'#0f2740', color:'#9fb0c6', border:'1px solid #334', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontSize:13 }}>
+                    ↻ Check Status
+                  </button>
+                  <span style={{ color:'#556a80', fontSize:12 }}>Check if client has made a selection</span>
+                </div>
+                <div style={{ marginTop:10, color:'#7f98b0', fontSize:12 }}>
+                  Client sees all {quoteOptions.length} options with descriptions, services, and pricing — then taps to choose.
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {showSettings ? (
           <div className='no-print'>
             <SettingsPanel
@@ -1752,14 +1951,19 @@ export default function AppNew(){
         })()}
 
 
-        <div className='form-grid-3' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12 }}>
+        <div className='form-grid-3' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr', gap:12 }}>
           <div>
             <label style={{ color:'#9fb0c6' }}>Client</label>
             <input value={client} onChange={e=>setClient(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
           </div>
           <div className='no-print'>
-            <label style={{ color:'#9fb0c6' }}>Client Email <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for auto emails</span></label>
+            <label style={{ color:'#9fb0c6' }}>Client Email <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for emails</span></label>
             <input type='email' value={clientEmail} onChange={e=>setClientEmail(e.target.value)} placeholder='client@example.com'
+              style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
+          </div>
+          <div className='no-print'>
+            <label style={{ color:'#9fb0c6' }}>Client Phone <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for SMS</span></label>
+            <input type='tel' value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder='(555) 123-4567'
               style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
           <div>
@@ -2337,6 +2541,99 @@ export default function AppNew(){
         </div>
 
       </div>
+
+      {/* Options Editor Overlay */}
+      {showOptionsEditor && quoteOptions?.length > 0 && (() => {
+        const editorSvcs = services.filter(s => s.enabled && (
+          s.id === 'wh_replacement' ? (s.garageQty||0) + (s.atticQty||0) > 0 : (s.qty||0) > 0
+        ))
+        const ACCENTS = ['#4a90d9', '#c9a84c', '#9b59b6']
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(4,24,39,0.97)', zIndex:1200, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+            {/* Header */}
+            <div style={{ flexShrink:0, background:'#041827', borderBottom:`1px solid ${GOLD}33`, padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <div style={{ color:GOLD, fontWeight:700, fontSize:17 }}>◈ Multi-Option Quote</div>
+                <div style={{ color:'#7f98b0', fontSize:12, marginTop:2 }}>Create up to 3 pricing tiers — client views all and picks one</div>
+              </div>
+              <button onClick={() => setShowOptionsEditor(false)} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'6px 14px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+            </div>
+            {/* Body */}
+            <div style={{ flex:1, overflowY:'auto', padding:20 }}>
+              {editorSvcs.length === 0 && (
+                <div style={{ background:'#1a2840', borderRadius:8, padding:'10px 14px', marginBottom:14, color:'#7f98b0', fontSize:13 }}>
+                  ℹ Enable services in the main form to pre-populate the "What's Included" checkboxes, or set prices and descriptions manually.
+                </div>
+              )}
+              <div className='options-editor-grid'>
+                {quoteOptions.map((opt, idx) => {
+                  const accent = ACCENTS[idx] || GOLD
+                  return (
+                    <div key={idx} style={{ background:'#071827', borderRadius:10, padding:16, borderTop:`3px solid ${accent}` }}>
+                      {/* Label */}
+                      <div style={{ marginBottom:12 }}>
+                        <label style={{ color:'#7f98b0', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', display:'block', marginBottom:4 }}>Option Label</label>
+                        <input value={opt.label} onChange={e=>updateOption(idx,'label',e.target.value)}
+                          style={{ width:'100%', padding:'8px 10px', background:'#0a1e32', color:'#fff', border:`1px solid ${accent}`, borderRadius:6, fontSize:14, fontWeight:700, boxSizing:'border-box' }} />
+                      </div>
+                      {/* Description */}
+                      <div style={{ marginBottom:12 }}>
+                        <label style={{ color:'#7f98b0', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', display:'block', marginBottom:4 }}>Tagline</label>
+                        <input value={opt.description||''} onChange={e=>updateOption(idx,'description',e.target.value)}
+                          placeholder="e.g. Essential plumbing, best value"
+                          style={{ width:'100%', padding:'8px 10px', background:'#0a1e32', color:'#fff', border:'1px solid #1a3450', borderRadius:6, fontSize:13, boxSizing:'border-box' }} />
+                      </div>
+                      {/* Services checkboxes */}
+                      {editorSvcs.length > 0 && (
+                        <div style={{ marginBottom:12 }}>
+                          <label style={{ color:'#7f98b0', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', display:'block', marginBottom:8 }}>What's Included</label>
+                          {editorSvcs.map(s => {
+                            const checked = (opt.services||[]).some(os => os.id === s.id)
+                            return (
+                              <label key={s.id} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, cursor:'pointer' }}>
+                                <input type='checkbox' checked={checked}
+                                  onChange={e=>toggleOptionService(idx, s.id, s.name, e.target.checked)}
+                                  style={{ accentColor:accent, width:14, height:14, flexShrink:0 }} />
+                                <span style={{ color: checked ? '#e2e8f0' : '#556a80', fontSize:13, transition:'color 0.1s' }}>{s.name}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {/* Price */}
+                      <div style={{ marginBottom:12 }}>
+                        <label style={{ color:'#7f98b0', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', display:'block', marginBottom:4 }}>Price</label>
+                        <div style={{ display:'flex' }}>
+                          <span style={{ background:'#0a1e32', border:`1px solid ${accent}`, borderRight:'none', padding:'8px 10px', borderRadius:'6px 0 0 6px', color:accent, fontWeight:700, fontSize:15 }}>$</span>
+                          <input type='number' value={opt.total||''} onChange={e=>updateOption(idx,'total',Number(e.target.value)||0)}
+                            placeholder='0'
+                            style={{ flex:1, padding:'8px 10px', background:'#0a1e32', color:accent, border:`1px solid ${accent}`, borderLeft:'none', borderRadius:'0 6px 6px 0', fontSize:16, fontWeight:700, boxSizing:'border-box', minWidth:0 }} />
+                        </div>
+                      </div>
+                      {/* Notes */}
+                      <div>
+                        <label style={{ color:'#7f98b0', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.8px', display:'block', marginBottom:4 }}>Notes (optional)</label>
+                        <textarea value={opt.notes||''} onChange={e=>updateOption(idx,'notes',e.target.value)}
+                          rows={2} placeholder="e.g. Includes 1-year labor warranty"
+                          style={{ width:'100%', padding:'8px 10px', background:'#0a1e32', color:'#fff', border:'1px solid #1a3450', borderRadius:6, fontSize:13, boxSizing:'border-box', resize:'vertical', fontFamily:'inherit' }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            {/* Footer */}
+            <div style={{ flexShrink:0, background:'#041827', borderTop:`1px solid ${GOLD}33`, padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ color:'#7f98b0', fontSize:13 }}>
+                {quoteOptions.filter(o=>o.total>0).length} of {quoteOptions.length} options priced
+              </div>
+              <button onClick={saveOptions} style={{ background:GOLD, color:NAVY, border:'none', padding:'11px 28px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:15 }}>
+                Save & Get Link
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Quick Estimate FAB — mobile only, hidden when modal is open */}
       {!showQuickEstimate && (
@@ -4158,6 +4455,153 @@ function AddOnRow({ onAdd }){
       <input type='number' value={q} onChange={e=>setQ(Number(e.target.value)||0)} style={{ width:80, padding:8 }} />
       <input type='text' value={formatMoneyInput(u)} onChange={e=>setU(parseMoneyInput(e.target.value))} style={{ width:120, padding:8 }} />
       <button onClick={()=>{ if(d) { onAdd(d,q,u); setD(''); setQ(1); setU(0) } }} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Add</button>
-    </div> 
+    </div>
+  )
+}
+
+function OptionsSelectionPage({ token }) {
+  const { useState, useEffect } = React
+  const [doc, setDoc]           = useState(null)
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(null)
+  const [confirming, setConfirming] = useState(null) // index being confirmed
+  const [submitting, setSubmitting] = useState(false)
+  const [done, setDone]         = useState(null) // selected option label after submit
+
+  const ACCENTS = ['#4a90d9', '#c9a84c', '#9b59b6']
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { data, error: fnErr } = await supabase.functions.invoke('get-options-doc', { body: { token } })
+        if (fnErr || !data || data.error) throw new Error(fnErr?.message || data?.error || 'Not found')
+        setDoc(data)
+        if (data.selected_option_idx != null) {
+          setDone(data.quote_options?.[data.selected_option_idx]?.label || 'an option')
+        }
+      } catch (e) {
+        setError(e.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [token])
+
+  async function submitSelection(idx) {
+    setSubmitting(true)
+    try {
+      const { data, error: fnErr } = await supabase.functions.invoke('submit-option-selection', { body: { token, option_idx: idx } })
+      if (fnErr || data?.error) throw new Error(fnErr?.message || data?.error)
+      setDone(doc.quote_options[idx].label)
+      setConfirming(null)
+    } catch (e) {
+      alert('Could not save selection: ' + e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const bg     = { minHeight:'100vh', background:'#0a1628', color:'#e2e8f0', fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif", padding:'24px 16px' }
+  const card   = (accent) => ({ background:'#041827', borderRadius:12, borderTop:`4px solid ${accent}`, padding:24, display:'flex', flexDirection:'column' })
+  const pill   = (accent) => ({ display:'inline-block', background:accent+'22', color:accent, border:`1px solid ${accent}`, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700, letterSpacing:'0.6px', marginBottom:12 })
+
+  if (loading) return <div style={{ ...bg, display:'flex', alignItems:'center', justifyContent:'center' }}><div style={{ color:'#7f98b0', fontSize:16 }}>Loading…</div></div>
+  if (error)   return <div style={{ ...bg, display:'flex', alignItems:'center', justifyContent:'center' }}><div style={{ background:'#1a0a0a', border:'1px solid #c0392b', borderRadius:10, padding:24, maxWidth:400, textAlign:'center' }}><div style={{ color:'#e74c3c', fontSize:18, fontWeight:700, marginBottom:8 }}>Quote Not Found</div><div style={{ color:'#9fb0c6', fontSize:14 }}>{error}</div></div></div>
+
+  if (done) {
+    return (
+      <div style={{ ...bg, display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ background:'#041827', borderRadius:12, borderTop:'4px solid #4caf50', padding:32, maxWidth:440, textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>✅</div>
+          <div style={{ color:'#4caf50', fontSize:22, fontWeight:700, marginBottom:8 }}>Selection Confirmed!</div>
+          <div style={{ color:'#9fb0c6', fontSize:15, lineHeight:1.6 }}>
+            You've selected the <strong style={{ color:GOLD }}>{done}</strong> option for quote <strong style={{ color:'#fff' }}>{doc?.doc_number}</strong>.
+          </div>
+          <div style={{ color:'#556a80', fontSize:13, marginTop:16 }}>
+            {doc?.contractor || 'Your contractor'} has been notified and will follow up with you shortly.
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={bg}>
+      {/* Header */}
+      <div style={{ maxWidth:900, margin:'0 auto 28px' }}>
+        {doc.logo_url && <img src={doc.logo_url} alt='logo' style={{ height:44, marginBottom:12, objectFit:'contain' }} />}
+        <div style={{ color:GOLD, fontSize:22, fontWeight:700 }}>{doc.contractor}</div>
+        <div style={{ color:'#7f98b0', fontSize:14, marginTop:4 }}>
+          Quote {doc.doc_number}{doc.client ? ` · For: ${doc.client}` : ''}{doc.address ? ` · ${doc.address}` : ''}
+        </div>
+        <div style={{ color:'#556a80', fontSize:13, marginTop:8 }}>
+          Review the options below and tap <strong style={{ color:'#9fb0c6' }}>Choose</strong> to select the package that works best for you.
+        </div>
+      </div>
+
+      {/* Options grid */}
+      <div className='options-client-grid' style={{ maxWidth:900, margin:'0 auto', gridTemplateColumns:`repeat(${doc.quote_options.length},1fr)` }}>
+        {doc.quote_options.map((opt, idx) => {
+          const accent = ACCENTS[idx] || GOLD
+          const isSelected = doc.selected_option_idx === idx
+          return (
+            <div key={idx} style={{ ...card(accent), position:'relative' }}>
+              {isSelected && (
+                <div style={{ position:'absolute', top:12, right:12, background:'#4caf50', color:'#fff', borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:700 }}>SELECTED</div>
+              )}
+              <div style={pill(accent)}>{opt.label}</div>
+              <div style={{ color:accent, fontSize:28, fontWeight:700, marginBottom:4 }}>
+                {'$' + Number(opt.total||0).toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:0 })}
+              </div>
+              {opt.description && <div style={{ color:'#9fb0c6', fontSize:14, marginBottom:12, lineHeight:1.5 }}>{opt.description}</div>}
+
+              {opt.services?.length > 0 && (
+                <div style={{ flex:1, marginBottom:16 }}>
+                  <div style={{ color:'#556a80', fontSize:11, textTransform:'uppercase', letterSpacing:'0.8px', fontWeight:600, marginBottom:8 }}>What's Included</div>
+                  {opt.services.map(s => (
+                    <div key={s.id} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:7 }}>
+                      <span style={{ color:'#4caf50', fontSize:14, flexShrink:0 }}>✓</span>
+                      <span style={{ color:'#c8d8e8', fontSize:14 }}>{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {opt.notes && (
+                <div style={{ background:'#0a1e32', borderRadius:6, padding:'10px 12px', marginBottom:16, color:'#7f98b0', fontSize:13, lineHeight:1.5 }}>
+                  {opt.notes}
+                </div>
+              )}
+
+              {confirming === idx ? (
+                <div style={{ marginTop:'auto' }}>
+                  <div style={{ color:'#e2e8f0', fontSize:14, marginBottom:10, textAlign:'center' }}>
+                    Confirm <strong style={{ color:accent }}>{opt.label}</strong>?
+                  </div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => setConfirming(null)} style={{ flex:1, padding:'10px 0', background:'transparent', color:'#7f98b0', border:'1px solid #334', borderRadius:8, cursor:'pointer', fontSize:14 }}>
+                      Back
+                    </button>
+                    <button onClick={() => submitSelection(idx)} disabled={submitting}
+                      style={{ flex:2, padding:'10px 0', background:accent, color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:15, opacity: submitting ? 0.7 : 1 }}>
+                      {submitting ? 'Confirming…' : 'Yes, Choose This'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setConfirming(idx)} style={{ marginTop:'auto', padding:'12px 0', background:accent, color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:15, width:'100%' }}>
+                  Choose {opt.label}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ textAlign:'center', marginTop:32, color:'#223346', fontSize:12 }}>
+        Powered by <strong style={{ color:'#334d66' }}>FieldQuote</strong> · Professional Plumbing Invoicing
+      </div>
+    </div>
   )
 }

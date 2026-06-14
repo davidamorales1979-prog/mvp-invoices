@@ -196,3 +196,10 @@
   .print-footer { display: flex; justify-content: space-between; color: #0a1628; font-size: 13px; letter-spacing: 0.02em; padding-top: 16px; border-top: 2px solid #c9a84c; margin-top: 20px; }
   .print-footer div { color: #0a1628; }
 }
+
+.options-editor-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.options-client-grid { display:grid; gap:16px; }
+@media (max-width:700px) {
+  .options-editor-grid { grid-template-columns:1fr; }
+  .options-client-grid { grid-template-columns:1fr !important; }
+}
