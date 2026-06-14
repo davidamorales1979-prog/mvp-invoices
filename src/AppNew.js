@@ -1530,8 +1530,16 @@ export default function AppNew(){
       })
       return updated
     })
-    // Reset shared water fixture price to signal "enter price fresh"
+    // Auto-fill Houses and Fixtures/House from blueprint
+    const detectedUnits = blueprintResults?.units
+    setHouses(detectedUnits > 0 ? detectedUnits : 1)
+    const waterFixCount = blueprintReviewItems
+      .filter(item => item.include && WATER_FIX_IDS.has(item.service_id))
+      .reduce((sum, item) => sum + (item.confirmed_qty || 0), 0)
+    if (waterFixCount > 0) setFixturesPerHouse(waterFixCount)
+    // Reset prices — user fills them in
     setWaterFixtureUnitPrice(0)
+    setPricePerFixture(0)
     // Items without a service_id become add-ons
     const extras = toApply.filter(item => !item.service_id)
     if (extras.length > 0) {
@@ -2293,9 +2301,9 @@ export default function AppNew(){
           </div>
 
           <div style={{ background:'#041827', padding:12, borderRadius:8 }}>
-            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD }}>{formatCurrency(base)}</div></div>
-            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</div><div style={{ color:'#9fb0c6' }}>{houses}</div></div>
-            <div className={!showFixturesPrint ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</div><div style={{ color:'#9fb0c6' }}>{fixturesPerHouse}</div></div>
+            <div className={base === 0 && fixturesPerHouse === 0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD }}>{formatCurrency(base)}</div></div>
+            <div className={fixturesPerHouse === 0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>{getUnitLabel(fixtureType)}</div><div style={{ color:'#9fb0c6' }}>{houses}</div></div>
+            <div className={fixturesPerHouse === 0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</div><div style={{ color:'#9fb0c6' }}>{fixturesPerHouse}</div></div>
             <div className={servicesTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Services</div><div style={{ color:GOLD }}>{formatCurrency(servicesTotal)}</div></div>
             <div className={addonsTotal===0 ? 'no-print' : undefined} style={{ display:'flex', justifyContent:'space-between' }}><div style={{ color:'#9fb0c6' }}>Add-ons</div><div style={{ color:GOLD }}>{formatCurrency(addonsTotal)}</div></div>
             <hr style={{ borderColor:'rgba(255,255,255,0.04)', margin:'8px 0' }} />
