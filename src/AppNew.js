@@ -155,11 +155,8 @@ export default function AppNew(){
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
   const [scheduleDate, setScheduleDate] = useState('')
-  const [showSchedule, setShowSchedule] = useState(false)
+  const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
   const [allScheduledDocs, setAllScheduledDocs] = useState([])
-  const [showClients, setShowClients] = useState(false)
-  const [showDashboard, setShowDashboard] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
   const [subscription, setSubscription] = useState(null)
   const [subLoading, setSubLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
@@ -770,8 +767,8 @@ export default function AppNew(){
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (showSchedule) fetchScheduledDocs()
-  }, [showSchedule, fetchScheduledDocs])
+    if (activeView === 'schedule') fetchScheduledDocs()
+  }, [activeView, fetchScheduledDocs])
 
   useEffect(() => {
     if (!user || !accountId || !client.trim()) { setClientPhotos([]); return }
@@ -1395,6 +1392,73 @@ export default function AppNew(){
     )
   }
 
+  // ── Full-page view routing ──────────────────────────────────────────────────
+  if (activeView) {
+    const VIEW_META = {
+      dashboard: { label: 'Dashboard',       icon: '📊' },
+      schedule:  { label: 'Schedule',        icon: '📅' },
+      clients:   { label: 'Clients',         icon: '👤' },
+      help:      { label: 'Help & Tutorial', icon: '❓' },
+    }
+    const { label, icon } = VIEW_META[activeView] || { label: activeView, icon: '' }
+    return (
+      <div style={{ minHeight:'100vh', background:NAVY, color:'#fff' }}>
+        {/* Sticky breadcrumb nav */}
+        <div className='no-print' style={{
+          position:'sticky', top:0, zIndex:200,
+          background:'#071827', borderBottom:`2px solid ${GOLD}`,
+          padding:'10px 20px', display:'flex', alignItems:'center', gap:14,
+        }}>
+          <img src={logoUrl || '/logo.svg'} alt='FieldQuote'
+            style={{ height:38, width:'auto', objectFit:'contain', flexShrink:0 }} />
+          <div style={{ width:1, height:30, background:'#1a3048', flexShrink:0 }} />
+          <button
+            onClick={() => setActiveView(null)}
+            style={{
+              display:'flex', alignItems:'center', gap:6,
+              background:'#0f2740', color:'#fff',
+              border:`1px solid ${GOLD}`, borderRadius:6,
+              padding:'7px 14px', cursor:'pointer',
+              fontWeight:700, fontSize:13, flexShrink:0,
+              letterSpacing:'-0.2px',
+            }}>
+            ← Back to Form
+          </button>
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ color:'#556a80', fontSize:13 }}>FieldQuote</span>
+            <span style={{ color:'#334d66', fontSize:13 }}>/</span>
+            <span style={{ color:GOLD, fontWeight:700, fontSize:14 }}>{icon} {label}</span>
+          </div>
+        </div>
+
+        {/* View content — same max-width as the main shell */}
+        <div style={{ maxWidth:980, margin:'0 auto', padding:'8px 20px 60px' }}>
+          {activeView === 'dashboard' && (
+            <DashboardPanel
+              docs={savedDocs} alerts={paymentAlerts}
+              onMarkPaid={markPhasePaid} onClose={() => setActiveView(null)}
+              user={user} accountId={accountId}
+            />
+          )}
+          {activeView === 'schedule' && (
+            <ScheduleCalendar docs={allScheduledDocs} onClose={() => setActiveView(null)} />
+          )}
+          {activeView === 'clients' && (
+            <ClientsPanel
+              docs={savedDocs}
+              onOpen={doc => { openDocument(doc); setActiveView(null) }}
+              onClose={() => setActiveView(null)}
+            />
+          )}
+          {activeView === 'help' && (
+            <HelpPanel onClose={() => setActiveView(null)} />
+          )}
+        </div>
+      </div>
+    )
+  }
+  // ── End view routing ────────────────────────────────────────────────────────
+
   return (
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
@@ -1443,13 +1507,13 @@ export default function AppNew(){
             <label style={{ color:'#9fb0c6' }}><input type='radio' checked={docType==='invoice'} onChange={()=>setDocType('invoice')} /> Invoice</label>
             <button onClick={convertToInvoice} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Convert to Invoice</button>
             <button onClick={saveDocument} disabled={isReadOnly} style={{ background: isReadOnly ? '#1a1a2e' : '#0f2740', color: isReadOnly ? '#555' : '#fff', border:`1px solid ${isReadOnly ? '#333' : GOLD}`, padding:8, borderRadius:6, cursor: isReadOnly ? 'not-allowed' : 'pointer' }}>Save Document</button>
-            {isAdmin && <button onClick={()=>setShowDashboard(s=>!s)} style={{ background:showDashboard ? GOLD : '#0f2740', color:showDashboard ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Dashboard</button>}
-            <button onClick={()=>setShowSchedule(s=>!s)} style={{ background:showSchedule ? GOLD : '#0f2740', color:showSchedule ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Schedule</button>
-            <button onClick={()=>setShowClients(s=>!s)} style={{ background:showClients ? GOLD : '#0f2740', color:showClients ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Clients</button>
+            {isAdmin && <button onClick={() => setActiveView('dashboard')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>📊 Dashboard</button>}
+            <button onClick={() => setActiveView('schedule')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>📅 Schedule</button>
+            <button onClick={() => setActiveView('clients')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>👤 Clients</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
             <label style={{ color:'#9fb0c6', display:'flex', alignItems:'center', gap:4, userSelect:'none' }}><input type='checkbox' checked={includePhotos} onChange={e=>setIncludePhotos(e.target.checked)} /> Photos</label>
             <button onClick={printDoc} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Print / PDF</button>
-            <button onClick={()=>setShowHelp(s=>!s)} style={{ background:showHelp ? GOLD : '#0f2740', color:showHelp ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Help</button>
+            <button onClick={() => setActiveView('help')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>❓ Help</button>
             {isAdmin && <button onClick={()=>setShowSettings(s=>!s)} style={{ background:showSettings ? GOLD : '#0f2740', color:showSettings ? NAVY : '#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Settings</button>}
             <button onClick={requestSignature} disabled={sigRequestLoading}
               style={{ background: signedAt ? '#1a3d1a' : showSigModal ? GOLD : '#0f2740', color: signedAt ? '#4caf50' : showSigModal ? NAVY : '#fff', border:`1px solid ${signedAt ? '#4caf50' : GOLD}`, padding:8, borderRadius:6, cursor:'pointer' }}>
@@ -1600,7 +1664,7 @@ export default function AppNew(){
                   <span style={{ color:'#9fb0c6', marginLeft:8, fontSize:13 }}>payment phase{urgent !== 1 ? 's' : ''}</span>
                 </div>
               </div>
-              <button onClick={()=>setShowDashboard(true)} style={{ background:'#e8a020', color:NAVY, border:'none', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:12, whiteSpace:'nowrap' }}>View</button>
+              <button onClick={() => setActiveView('dashboard')} style={{ background:'#e8a020', color:NAVY, border:'none', padding:'6px 14px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:12, whiteSpace:'nowrap' }}>View</button>
             </div>
           )
         })()}
@@ -1975,29 +2039,7 @@ export default function AppNew(){
           </section>
         ) : null}
 
-        {showDashboard ? (
-          <div className='no-print'>
-            <DashboardPanel docs={savedDocs} alerts={paymentAlerts} onMarkPaid={markPhasePaid} onClose={()=>setShowDashboard(false)} user={user} accountId={accountId} />
-          </div>
-        ) : null}
-
-        {showSchedule ? (
-          <div className='no-print'>
-            <ScheduleCalendar docs={allScheduledDocs} onClose={()=>setShowSchedule(false)} />
-          </div>
-        ) : null}
-
-        {showClients ? (
-          <div className='no-print'>
-            <ClientsPanel docs={savedDocs} onOpen={doc=>{ openDocument(doc); setShowClients(false) }} onClose={()=>setShowClients(false)} />
-          </div>
-        ) : null}
-
-        {showHelp ? (
-          <div className='no-print'>
-            <HelpPanel onClose={()=>setShowHelp(false)} />
-          </div>
-        ) : null}
+        {/* Dashboard / Schedule / Clients / Help now open as full-page views via activeView state */}
 
         <footer className='no-print' style={{ marginTop:16, borderTop:`1px solid ${GOLD}`, paddingTop:12, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ color:'#9fb0c6' }}>Payment due upon receipt</div>
