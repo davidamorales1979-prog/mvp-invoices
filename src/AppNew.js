@@ -1536,7 +1536,8 @@ export default function AppNew(){
     const waterFixCount = blueprintReviewItems
       .filter(item => item.include && WATER_FIX_IDS.has(item.service_id))
       .reduce((sum, item) => sum + (item.confirmed_qty || 0), 0)
-    if (waterFixCount > 0) setFixturesPerHouse(waterFixCount)
+    const unitCount = detectedUnits > 0 ? detectedUnits : 1
+    if (waterFixCount > 0) setFixturesPerHouse(Math.round(waterFixCount / unitCount))
     // Reset prices — user fills them in
     setWaterFixtureUnitPrice(0)
     setPricePerFixture(0)
