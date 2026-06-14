@@ -166,6 +166,7 @@ export default function AppNew(){
   const [billingPortalLoading, setBillingPortalLoading] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showQuickEstimate, setShowQuickEstimate] = useState(false)
   const signToken = useMemo(() => new URLSearchParams(window.location.search).get('sign'), [])
   const [signatureToken, setSignatureToken] = useState(null)
   const [signatureData, setSignatureData] = useState(null)
@@ -1239,6 +1240,14 @@ export default function AppNew(){
     }
   }
 
+  function handleQuickSaved(savedDoc) {
+    applyDocumentData(savedDoc)
+    counter.bump()
+    fetchSavedDocs()
+    setShowQuickEstimate(false)
+    setSaveMessage('Quick estimate saved!')
+  }
+
   if (signToken) return <SignaturePage token={signToken} />
   if (joinToken) return <JoinPage token={joinToken} user={user} authLoading={authLoading} />
   if (paymentToken === 'success') return <PaymentThankYouPage />
@@ -1416,6 +1425,10 @@ export default function AppNew(){
 
         <div className='screen-only'>
           <div className='no-print' style={{ marginTop:12, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+          <button onClick={()=>setShowQuickEstimate(true)}
+            style={{ background:GOLD, color:NAVY, border:'none', padding:'8px 14px', borderRadius:6, fontWeight:700, fontSize:13, cursor:'pointer', flexShrink:0, whiteSpace:'nowrap', letterSpacing:'-0.2px' }}>
+            ⚡ Quick Estimate
+          </button>
           {contractorNames.map(name => (
             <button key={name} onClick={()=>setContractor(name)} style={{ padding:8, borderRadius:6, background: contractor===name ? GOLD : '#0f2740', color: contractor===name ? NAVY : '#fff' }}>{name}</button>
           ))}
@@ -2186,6 +2199,313 @@ export default function AppNew(){
           </div>
         </div>
 
+      </div>
+
+      {/* Quick Estimate FAB — mobile only, hidden when modal is open */}
+      {!showQuickEstimate && (
+        <button className='qe-fab no-print' onClick={() => setShowQuickEstimate(true)}>
+          ⚡ Quick Estimate
+        </button>
+      )}
+
+      {/* Quick Estimate overlay */}
+      {showQuickEstimate && (
+        <QuickEstimateModal
+          onClose={() => setShowQuickEstimate(false)}
+          onSaved={handleQuickSaved}
+          contractorNames={contractorNames}
+          defaultContractor={defaultContractor}
+          user={user}
+          accountId={accountId}
+          counter={counter}
+        />
+      )}
+    </div>
+  )
+}
+
+function QEStepper({ value, onChange, min = 0 }) {
+  const btnStyle = { width: 36, height: 36, borderRadius: 8, border: '1px solid #2a3f58', background: '#0a1628', color: '#fff', fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, flexShrink: 0 }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <button type='button' style={btnStyle} onClick={() => onChange(Math.max(min, value - 1))}>−</button>
+      <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700, fontSize: 16, color: '#e2e8f0' }}>{value}</span>
+      <button type='button' style={btnStyle} onClick={() => onChange(value + 1)}>+</button>
+    </div>
+  )
+}
+
+function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContractor, user, accountId, counter }) {
+  const [qContractor, setQContractor] = useState(defaultContractor || (contractorNames[0] || ''))
+  const [qClient, setQClient] = useState('')
+  const [qEmail, setQEmail] = useState('')
+  const [qAddress, setQAddress] = useState('')
+  const [qProjectType, setQProjectType] = useState('New Construction')
+  const [qHouses, setQHouses] = useState(1)
+  const [qFixtures, setQFixtures] = useState(3)
+  const [qPrice, setQPrice] = useState(5200)
+  const [qNotes, setQNotes] = useState('')
+  const [qSvc, setQSvc] = useState(() => mergeServices(null))
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+
+  const isNC = qProjectType === 'New Construction'
+
+  const qTotal = useMemo(() => {
+    if (isNC) {
+      const base = qHouses * qFixtures * qPrice
+      const extra = qSvc.reduce((sum, s) => {
+        if (!s.enabled || s.id === 'wh_replacement') return sum
+        if (BASE_SERVICE_IDS.includes(s.id)) return sum
+        return sum + (s.qty || 0) * (s.unit || 0)
+      }, 0)
+      return base + extra
+    }
+    return qSvc.reduce((sum, s) => {
+      if (!s.enabled || s.id === 'wh_replacement') return sum
+      return sum + (s.qty || 0) * (s.unit || 0)
+    }, 0)
+  }, [isNC, qHouses, qFixtures, qPrice, qSvc])
+
+  function toggleSvc(id) {
+    setQSvc(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled, qty: s.qty || 1 } : s))
+  }
+  function updateSvc(id, field, value) {
+    setQSvc(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s))
+  }
+
+  async function handleSave() {
+    if (!qClient.trim()) { setErrMsg('Client name is required'); return }
+    setSaving(true)
+    setErrMsg('')
+    const docNumber = `QE-${counter.raw}`
+    const mergedSvcs = mergeServices(null).map(s => {
+      const q = qSvc.find(x => x.id === s.id)
+      return q ? { ...s, enabled: q.enabled, qty: q.qty, unit: q.unit, desc: q.desc || '' } : s
+    })
+    const payload = {
+      contractor: qContractor,
+      show_logo: false,
+      doc_type: 'quote',
+      client: qClient,
+      client_email: qEmail || null,
+      address: qAddress,
+      houses: isNC ? qHouses : 0,
+      fixtures_per_house: isNC ? qFixtures : 0,
+      price_per_fixture: isNC ? qPrice : 0,
+      fixture_type: '',
+      project_type: qProjectType,
+      include_underground: false,
+      include_rough: false,
+      include_trim: false,
+      service_start_percent: 50,
+      service_completion_percent: 50,
+      underground_pct: 0,
+      rough_pct: 0,
+      trim_pct: 0,
+      services: mergedSvcs,
+      addons: [],
+      notes: qNotes,
+      history: [{ ts: new Date().toISOString(), entry: 'created:quick_estimate', status: 'quote', docNumber }],
+      status: 'quote',
+      total: qTotal,
+      user_id: accountId || user.id,
+      created_by: user.id,
+      doc_number: docNumber,
+      raw_counter: counter.raw,
+      scheduled_date: null,
+      signature_token: null,
+      signature_data: null,
+      signed_at: null,
+      signer_name: null,
+    }
+    try {
+      const { data, error } = await supabase.from('documents').insert([payload]).select('*').single()
+      if (error) { setErrMsg(`Save failed: ${error.message}`); setSaving(false); return }
+      onSaved(data)
+    } catch (e) {
+      setErrMsg(`Save failed: ${e.message}`)
+      setSaving(false)
+    }
+  }
+
+  const inputStyle = { width: '100%', background: '#0d1f30', color: '#fff', border: '1px solid #2a3f58', borderRadius: 8, padding: '10px 12px', fontSize: 15, boxSizing: 'border-box' }
+  const labelStyle = { color: '#7f98b0', fontSize: 12, display: 'block', marginBottom: 4 }
+  const QE_GROUPS = SERVICE_GROUPS.map(g => ({ ...g, ids: g.ids.filter(id => id !== 'wh_replacement') }))
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: NAVY, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ flexShrink: 0, background: '#071827', borderBottom: `2px solid ${GOLD}`, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ color: GOLD, fontWeight: 700, fontSize: 17 }}>⚡ Quick Estimate</div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#7f98b0', fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>✕</button>
+      </div>
+
+      {/* Scrollable body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 140px' }}>
+
+        {contractorNames.length > 1 && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Contractor</label>
+            <select value={qContractor} onChange={e => setQContractor(e.target.value)} style={inputStyle}>
+              {contractorNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Client Name *</label>
+          <input value={qClient} onChange={e => setQClient(e.target.value)} placeholder='Client name' style={inputStyle} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Client Email (optional)</label>
+          <input type='email' value={qEmail} onChange={e => setQEmail(e.target.value)} placeholder='client@email.com' style={inputStyle} />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>Address</label>
+          <input value={qAddress} onChange={e => setQAddress(e.target.value)} placeholder='Job site address' style={inputStyle} />
+        </div>
+
+        {/* Project type toggle */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Project Type</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['New Construction', 'Existing - Service'].map(pt => (
+              <button key={pt} type='button' onClick={() => setQProjectType(pt)} style={{
+                flex: 1, padding: '10px 6px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                background: qProjectType === pt ? GOLD : '#0d1f30',
+                color: qProjectType === pt ? NAVY : '#9fb0c6',
+                border: qProjectType === pt ? `1px solid ${GOLD}` : '1px solid #2a3f58',
+              }}>{pt}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* New Construction fixture pricing */}
+        {isNC && (
+          <div style={{ background: '#071827', borderRadius: 10, padding: 14, marginBottom: 16, border: '1px solid #1a3148' }}>
+            <div style={{ color: GOLD, fontWeight: 700, fontSize: 13, marginBottom: 14 }}>Fixtures &amp; Pricing</div>
+            {[
+              { label: 'Houses', value: qHouses, set: setQHouses, min: 1 },
+              { label: 'Fixtures / House', value: qFixtures, set: setQFixtures, min: 1 },
+            ].map(({ label, value, set, min }) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ color: '#9fb0c6', fontSize: 14 }}>{label}</span>
+                <QEStepper value={value} onChange={set} min={min} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#9fb0c6', fontSize: 14 }}>Price / Fixture</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ color: '#7f98b0' }}>$</span>
+                <input type='number' value={qPrice} onChange={e => setQPrice(Number(e.target.value))}
+                  style={{ width: 90, background: '#0a1628', color: '#fff', border: '1px solid #2a3f58', borderRadius: 8, padding: '8px 10px', fontSize: 15, textAlign: 'right' }} />
+              </div>
+            </div>
+            <div style={{ marginTop: 12, padding: '8px 0', borderTop: '1px solid #1a3148', color: '#556a80', fontSize: 12 }}>
+              Base: {qHouses} houses × {qFixtures} fixtures × ${qPrice.toLocaleString()} = <span style={{ color: GOLD, fontWeight: 700 }}>{formatCurrency(qHouses * qFixtures * qPrice)}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Services */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ ...labelStyle, marginBottom: 10 }}>Services</label>
+          {QE_GROUPS.map(group => {
+            const groupSvcs = group.ids.map(id => qSvc.find(s => s.id === id)).filter(Boolean)
+            return (
+              <div key={group.label} style={{ marginBottom: 14 }}>
+                <div style={{ color: '#556a80', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700, marginBottom: 6 }}>{group.label}</div>
+                {groupSvcs.map(s => {
+                  const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
+                  return (
+                    <div key={s.id} style={{ marginBottom: 6 }}>
+                      <div onClick={() => toggleSvc(s.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                        background: s.enabled ? '#0d2035' : '#071827',
+                        border: s.enabled ? `1px solid ${GOLD}` : '1px solid #1a3148',
+                        borderRadius: s.enabled ? '8px 8px 0 0' : 8,
+                        padding: '10px 12px',
+                      }}>
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                          background: s.enabled ? GOLD : 'transparent',
+                          border: s.enabled ? `2px solid ${GOLD}` : '2px solid #2a3f58',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {s.enabled && <span style={{ color: NAVY, fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                        </div>
+                        <span style={{ color: s.enabled ? '#e2e8f0' : '#9fb0c6', fontSize: 14, flex: 1 }}>{s.name}</span>
+                        {s.enabled && !isTap && (
+                          <span style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>{formatCurrency((s.qty || 0) * (s.unit || 0))}</span>
+                        )}
+                      </div>
+                      {s.enabled && (
+                        <div onClick={e => e.stopPropagation()} style={{
+                          background: '#041827', border: `1px solid ${GOLD}`, borderTop: 'none',
+                          borderRadius: '0 0 8px 8px', padding: '10px 12px',
+                        }}>
+                          {isTap ? (
+                            <input value={s.desc || ''} onChange={e => updateSvc(s.id, 'desc', e.target.value)}
+                              placeholder={s.id === 'sewer_tap' ? 'Depth (e.g. 8 ft deep)' : 'Distance (e.g. 150 ft from meter)'}
+                              style={{ ...inputStyle, fontSize: 14 }} />
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ color: '#556a80', fontSize: 11, marginBottom: 3 }}>Qty</div>
+                                <input type='number' value={s.qty || 0} onChange={e => updateSvc(s.id, 'qty', Number(e.target.value))}
+                                  style={{ ...inputStyle, fontSize: 14 }} />
+                              </div>
+                              <div style={{ flex: 2 }}>
+                                <div style={{ color: '#556a80', fontSize: 11, marginBottom: 3 }}>Unit Price ($)</div>
+                                <input type='number' value={s.unit || 0} onChange={e => updateSvc(s.id, 'unit', Number(e.target.value))}
+                                  style={{ ...inputStyle, fontSize: 14 }} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Notes */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Notes (optional)</label>
+          <textarea value={qNotes} onChange={e => setQNotes(e.target.value)} rows={3} placeholder='Scope of work, special notes…'
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+        </div>
+
+        {errMsg && (
+          <div style={{ color: '#ff6b6b', fontSize: 14, marginBottom: 12, background: '#1a0a0a', borderRadius: 8, padding: '10px 14px', border: '1px solid #5c1a1a' }}>{errMsg}</div>
+        )}
+      </div>
+
+      {/* Sticky footer */}
+      <div style={{ flexShrink: 0, background: '#071827', borderTop: `2px solid ${GOLD}`, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ color: '#7f98b0', fontSize: 12 }}>Estimate Total</div>
+          <div style={{ color: GOLD, fontSize: 22, fontWeight: 700 }}>{formatCurrency(qTotal)}</div>
+        </div>
+        <button onClick={handleSave} disabled={saving} style={{
+          background: saving ? '#7a6228' : GOLD, color: NAVY, border: 'none',
+          borderRadius: 10, padding: '13px 28px', fontWeight: 700, fontSize: 16,
+          cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
+        }}>
+          {saving ? 'Saving…' : 'Save Quote'}
+        </button>
       </div>
     </div>
   )

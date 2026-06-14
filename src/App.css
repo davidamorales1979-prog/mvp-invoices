@@ -120,6 +120,35 @@
   .phase-boxes > div { min-width: 0 !important; width: 100% !important; }
 }
 
+/* ====== QUICK ESTIMATE FAB (mobile-only floating action button) ====== */
+.qe-fab {
+  display: none;
+}
+@media (max-width: 600px) {
+  .qe-fab {
+    display: flex;
+    position: fixed;
+    bottom: 22px;
+    right: 18px;
+    z-index: 900;
+    background: #c9a84c;
+    color: #0a1628;
+    border: none;
+    border-radius: 28px;
+    padding: 15px 22px;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+    cursor: pointer;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    letter-spacing: -0.2px;
+  }
+  /* Don't show FAB when quick estimate is open */
+  .qe-fab[hidden] { display: none !important; }
+}
+
 /* Print rules: hide controls and make document print-friendly */
 @media print {
   @page { margin: 10mm; }

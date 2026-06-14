@@ -43,8 +43,8 @@ Deno.serve(async (req) => {
 
     const appUrl = Deno.env.get('APP_URL') ?? 'https://mvp-invoices.vercel.app'
 
-    // Expires 30 days from now (Stripe max for checkout sessions)
-    const expiresAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+    // Stripe allows 30 min – 24 hours; use the maximum
+    const expiresAt = Math.floor(Date.now() / 1000) + 24 * 60 * 60
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
