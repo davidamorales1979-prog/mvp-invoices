@@ -158,11 +158,15 @@ function buildHtml({ type, client_name, doc_number, total, address, notes, payme
 </html>`
 }
 
-async function sendViaResend({ apiKey, from, to, subject, html }) {
+async function sendViaResend({ apiKey, from, to, subject, html, pdf_base64, pdf_filename }) {
+  const payload: Record<string, unknown> = { from, to: [to], subject, html }
+  if (pdf_base64 && pdf_filename) {
+    payload.attachments = [{ filename: pdf_filename, content: pdf_base64 }]
+  }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify(payload),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.message || 'Resend API error')
@@ -187,7 +191,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { type, to, client_name, doc_number, total, address, notes, payment_link, contractor_name, company_name, payment_schedule } = body
+    const { type, to, client_name, doc_number, total, address, notes, payment_link, contractor_name, company_name, payment_schedule, pdf_base64, pdf_filename } = body
 
     if (!to || !type || !doc_number) {
       return new Response(JSON.stringify({ error: 'Missing required fields: to, type, doc_number' }), {
@@ -210,7 +214,7 @@ Deno.serve(async (req) => {
     }
 
     const html = buildHtml({ type, client_name, doc_number, total, address, notes, payment_link, contractor_name, company_name, payment_schedule })
-    const result = await sendViaResend({ apiKey, from, to, subject: subjects[type] ?? `Message from ${company_name}`, html })
+    const result = await sendViaResend({ apiKey, from, to, subject: subjects[type] ?? `Message from ${company_name}`, html, pdf_base64, pdf_filename })
 
     console.log(`send-client-email: ${type} → ${to} (id: ${result.id})`)
     return new Response(JSON.stringify({ ok: true, id: result.id }), {

@@ -19,6 +19,7 @@ const SERVICES = [
   { id: 'sewer_tap',    name: 'Sewer Tap',                     unit: 0, desc: '' },
   { id: 'storm',        name: 'Storm Drain',                   unit: 700 },
   { id: 'grease',       name: 'Grease Trap',                   unit: 450 },
+  { id: 'catch_basin',  name: 'Catch Basin',                   unit: 0 },
   // Water
   { id: 'water',        name: 'Water Line Meter',              unit: 800 },
   { id: 'water_tap',    name: 'Water Meter Tap',               unit: 0, desc: '' },
@@ -43,7 +44,7 @@ const SERVICES = [
 ]
 
 const SERVICE_GROUPS = [
-  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease'] },
+  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin'] },
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
@@ -232,7 +233,11 @@ export default function AppNew(){
       return rows
     }
     if (!(s.qty||0)) return []
-    const name = (s.id === 'water_tap' || s.id === 'sewer_tap') && s.desc ? `${s.name} — ${s.desc}` : s.name
+    const name = (s.id === 'water_tap' || s.id === 'sewer_tap') && s.desc
+      ? `${s.name} — ${s.desc}`
+      : s.id === 'storm' && s.lfMode
+      ? `${s.name} (linear ft)`
+      : s.name
     return [{ ...s, name }]
   })
   const addonsTotal = useMemo(()=> addons.reduce((s,a)=> s + (a.qty||0)*(a.unit||0), 0), [addons])
@@ -980,13 +985,14 @@ export default function AppNew(){
           } catch (e) { console.error('auto payment link on convert:', e) }
         }
 
-        // Send invoice email with payment link
+        // Send invoice email with payment link and PDF attachment
         try {
+          const pdfBase64 = await generatePdfBase64()
           await supabase.functions.invoke('send-client-email', {
             body: {
               type: 'invoice',
               to: clientEmail,
-              client_name: client,
+              client_name: client || 'Valued Client',
               doc_number: docNumber,
               total: displayTotal,
               address,
@@ -995,6 +1001,8 @@ export default function AppNew(){
               contractor_name: contractor,
               company_name: profileCompany || contractor,
               payment_schedule: buildPaymentSchedule(),
+              pdf_base64: pdfBase64 || undefined,
+              pdf_filename: pdfBase64 ? `INV-${docNumber}.pdf` : undefined,
             }
           })
           setSaveMessage(`Invoice emailed to ${clientEmail}`)
@@ -1165,17 +1173,89 @@ export default function AppNew(){
     ]
   }
 
+  async function generatePdfBase64() {
+    try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ])
+      const printOnly = document.querySelector('.print-only')
+      const printDoc  = document.querySelector('.print-document')
+      if (!printOnly || !printDoc) return null
+
+      // Temporarily reveal the hidden print element off-screen
+      const saved = {
+        display:   printOnly.style.display,
+        position:  printOnly.style.position,
+        top:       printOnly.style.top,
+        left:      printOnly.style.left,
+        width:     printOnly.style.width,
+        bgColor:   printDoc.style.backgroundColor,
+        padding:   printDoc.style.padding,
+      }
+      printOnly.style.display  = 'block'
+      printOnly.style.position = 'fixed'
+      printOnly.style.top      = '-9999px'
+      printOnly.style.left     = '-9999px'
+      printOnly.style.width    = '794px'
+      printDoc.style.backgroundColor = '#0a1628'
+      printDoc.style.padding         = '32px 40px'
+
+      // Let images settle
+      await new Promise(r => setTimeout(r, 150))
+
+      const canvas = await html2canvas(printDoc, {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: '#0a1628',
+        logging: false,
+      })
+
+      // Restore
+      printOnly.style.display  = saved.display
+      printOnly.style.position = saved.position
+      printOnly.style.top      = saved.top
+      printOnly.style.left     = saved.left
+      printOnly.style.width    = saved.width
+      printDoc.style.backgroundColor = saved.bgColor
+      printDoc.style.padding         = saved.padding
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.85)
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const imgH  = (canvas.height / canvas.width) * pageW
+
+      let remaining = imgH
+      let yOffset   = 0
+      while (remaining > 0) {
+        if (yOffset > 0) pdf.addPage()
+        pdf.addImage(imgData, 'JPEG', 0, -yOffset, pageW, imgH)
+        yOffset   += pageH
+        remaining -= pageH
+      }
+
+      return pdf.output('datauristring').split(',')[1] // base64 string
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      return null
+    }
+  }
+
   async function sendEmail(){
     if (clientEmail) {
       // Send branded HTML email via Resend
       const payLink = docType === 'invoice' ? history.find(h => h.entry === 'payment_link_created')?.url : null
+      setSaveMessage('Generating PDF…')
+      const pdfBase64 = await generatePdfBase64()
+      const prefix = docType === 'invoice' ? 'INV' : 'QT'
       setSaveMessage('Sending email…')
       try {
         const { error } = await supabase.functions.invoke('send-client-email', {
           body: {
             type: docType === 'invoice' ? 'invoice' : 'quote',
             to: clientEmail,
-            client_name: client,
+            client_name: client || 'Valued Client',
             doc_number: docNumber,
             total: displayTotal,
             address,
@@ -1184,6 +1264,8 @@ export default function AppNew(){
             contractor_name: contractor,
             company_name: profileCompany || contractor,
             payment_schedule: buildPaymentSchedule(),
+            pdf_base64: pdfBase64 || undefined,
+            pdf_filename: pdfBase64 ? `${prefix}-${docNumber}.pdf` : undefined,
           }
         })
         if (error) throw new Error(error.message)
@@ -1197,7 +1279,7 @@ export default function AppNew(){
     const subject = `${docNumber} - ${contractor}`
     const paymentLines = buildPaymentSchedule().map(p => `  - ${p.name}: ${formatCurrency(p.amount)}`)
     const bodyParts = [
-      `Dear ${client || 'Client'},`,
+      `Dear ${client || 'Valued Client'},`,
       '',
       `Please find your ${docType === 'invoice' ? 'invoice' : 'quote'} details below.`,
       '',
@@ -1819,7 +1901,8 @@ export default function AppNew(){
                     }
 
                     // Standard row (with optional desc field for water_tap / sewer_tap)
-                    const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
+                    const isTap   = s.id === 'water_tap' || s.id === 'sewer_tap'
+                    const isStorm = s.id === 'storm'
                     const tapPlaceholder = s.id === 'water_tap' ? 'Distance (e.g. 150 ft from meter)' : 'Depth (e.g. 8 ft deep)'
                     return (
                       <div key={s.id} className={!s.enabled || !(s.qty||0) ? 'no-print' : undefined} style={{ display:'flex', gap:8, alignItems:'center', padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)', flexWrap: isTap ? 'wrap' : undefined }}>
@@ -1827,6 +1910,12 @@ export default function AppNew(){
                         <div style={{ flex:1, minWidth: isTap ? 160 : undefined }}>
                           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                             <span>{s.name}</span>
+                            {isStorm ? (
+                              <div className='no-print' style={{ display:'flex', gap:2 }}>
+                                <button type='button' onClick={()=>updateService(i,'lfMode',false)} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:!s.lfMode ? GOLD : '#1a3450', color:!s.lfMode ? NAVY : '#9fb0c6', cursor:'pointer' }}>Fixed</button>
+                                <button type='button' onClick={()=>updateService(i,'lfMode',true)}  style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.lfMode  ? GOLD : '#1a3450', color:s.lfMode  ? NAVY : '#9fb0c6', cursor:'pointer' }}>Linear Ft</button>
+                              </div>
+                            ) : null}
                             {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
                               <div className='no-print' style={{ display:'flex', gap:2 }}>
                                 <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
@@ -1843,8 +1932,14 @@ export default function AppNew(){
                               style={{ marginTop:4, fontSize:12, padding:'3px 8px', borderRadius:4, background:'#0a1e32', color:'#fff', border:'1px solid #223', width:'100%', boxSizing:'border-box' }} />
                           ) : null}
                         </div>
-                        <input className='no-print' type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
-                        <input className='no-print' type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                        <div className='no-print' style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                          <input type='number' value={s.qty} disabled={!s.enabled} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:80 }} />
+                          {isStorm && s.lfMode ? <span style={{ fontSize:10, color:'#7f98b0' }}>feet</span> : null}
+                        </div>
+                        <div className='no-print' style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+                          <input type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                          {isStorm && s.lfMode ? <span style={{ fontSize:10, color:'#7f98b0' }}>per linear ft</span> : null}
+                        </div>
                         <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
                       </div>
                     )
