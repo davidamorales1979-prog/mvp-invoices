@@ -2982,189 +2982,281 @@ function HelpPanel({ onClose }) {
     })
   }
 
+  const TIP_STYLE = { background:'#041020', border:`1px solid ${GOLD}55`, borderRadius:6, padding:'8px 12px', marginBottom:12, fontSize:12, color:GOLD, lineHeight:1.65 }
+  const STEP_HEAD = { color:GOLD, fontWeight:700 }
+
   const sections = [
     {
-      title: 'Creating a Quote',
-      desc: 'Build a professional plumbing quote with fixture counts, project type, and services.',
+      title: 'Complete Workflow — First Job to Paid Invoice',
+      icon: '🗺️',
+      desc: 'New to FieldQuote? Follow these 9 steps in order — from on-site estimate to paid invoice. Every job follows this same path.',
+      tip: 'All 9 steps are covered individually in the sections below. Come back here any time to see the big picture.',
       steps: [
-        'Click your name in the contractor buttons at the top of the toolbar.',
-        'Enter the Client name and job Address.',
-        'Choose the Project Type: New Construction or Service/Replacement.',
-        'Set the number of Houses/Units, Fixtures per House, and Price per Fixture.',
-        'Enable any additional services in the Independent Services section.',
-        'Add optional line items using the Add-ons section.',
-        'Click Save Document, then Print / PDF to generate the quote.',
+        <><span style={STEP_HEAD}>1 — Quick Estimate (on-site)</span>{' '}Open FieldQuote on your phone and tap the ⚡ Quick Estimate button in the bottom-right corner. Enter client name, address, project type, and any services. Tap Save Quote. Done in under 2 minutes — the estimate loads into the main form automatically.</>,
+        <><span style={STEP_HEAD}>2 — Build the Full Quote</span>{' '}Back in the office, refine the estimate: add the client's email, adjust fixture counts and pricing, toggle services between % Based and Independent, and add extra charges in Add-ons.</>,
+        <><span style={STEP_HEAD}>3 — Save the Document</span>{' '}Click Save Document in the toolbar. The quote gets a QT-### number and is stored in the cloud. Use Print / PDF to generate a shareable PDF.</>,
+        <><span style={STEP_HEAD}>4 — Request Client Signature</span>{' '}Click Signature in the toolbar. Copy the unique link and text it to your client. They open it on their phone, review the quote, and sign with their finger. Once signed the button turns green and the signature appears on the PDF.</>,
+        <><span style={STEP_HEAD}>5 — Convert to Invoice</span>{' '}When a phase is due, click Convert to Invoice. A new INV-### number is assigned. For New Construction, check only the phases being billed (e.g. Rough-In). The total updates automatically.</>,
+        <><span style={STEP_HEAD}>6 — Send Payment Link</span>{' '}Click $ Pay Link in the toolbar. A secure Stripe checkout page is created for the invoice total. Copy the link and text it to your client. When they pay, the invoice is automatically marked Paid and they get a receipt email.</>,
+        <><span style={STEP_HEAD}>7 — Send Email</span>{' '}Click Send Email in the toolbar. A branded email goes directly to the client's inbox with an invoice summary and an embedded Pay Now button — no email app needed on your end.</>,
+        <><span style={STEP_HEAD}>8 — Log the Trip</span>{' '}Scroll below the saved document and click Log Trip. Enter origin, destination, and miles. All trips are saved for IRS mileage tracking and annual export.</>,
+        <><span style={STEP_HEAD}>9 — Upload Job Photos</span>{' '}Scroll to the Client Photos section and click + Add Photos. Before/after photos are tied to the client name and load on every document for that client. Check Photos in the toolbar to include them in the printed PDF.</>,
       ]
     },
     {
-      title: 'Converting to Invoice',
-      desc: 'Turn an accepted plumbing quote into a phase invoice — Underground, Rough-In, or Trim — with the correct amount due.',
+      title: 'Quick Estimate — Mobile Mode',
+      icon: '⚡',
+      desc: 'Create a basic quote in under 2 minutes from your phone while standing in front of the client.',
+      tip: 'Quick Estimate saves directly to your account. Open it in the main form afterward to add more detail — signature, payment link, or email.',
       steps: [
-        'Open a saved quote from the Saved Documents table at the bottom.',
-        'Click Convert to Invoice in the toolbar — the document gets a new INV-### number.',
-        'For New Construction, check only the phases being billed (e.g. Underground only).',
-        'The invoice total automatically updates to show only the selected phase amount plus independent services.',
-        'Save the document, then Print / PDF to deliver the invoice to your client.',
+        'On your phone, open FieldQuote and tap the ⚡ Quick Estimate button (bottom-right corner of the screen).',
+        'On desktop or tablet, click ⚡ Quick Estimate in the main toolbar.',
+        'Enter the client\'s name (required), email address, and job site address.',
+        'Choose the Project Type: New Construction or Existing - Service.',
+        'For New Construction: tap the + and − buttons to set Houses and Fixtures per House, then enter the Price per Fixture. The base total appears live in the footer as you type.',
+        'For Existing - Service: tap any service row to enable it, then enter Qty and Unit Price.',
+        'Water Heater Replacement expands into separate Garage and Attic rows — each with its own qty and unit price.',
+        'Sewer Tap and Water Meter Tap show a description field (e.g. depth or distance) instead of qty/price.',
+        'Add any scope notes in the Notes field at the bottom.',
+        'Tap Save Quote — the estimate is saved instantly and loaded into the main form. The counter advances automatically.',
       ]
     },
     {
-      title: 'Adding Independent Services',
-      desc: 'Services are organized into five groups — Sewer, Water, Gas, Others, and Remodeling / Fixtures. Enable any service to add it as a line item.',
+      title: 'Building a Full Quote',
+      icon: '📋',
+      desc: 'Build a detailed professional quote with client info, project type, fixture pricing, services, and add-ons.',
       steps: [
-        'Scroll to the Independent Services section — services are grouped by trade: Sewer, Water, Gas, Others, and Remodeling / Fixtures.',
-        'Sewer group includes: Sewer Line, Sewer Tap, Storm Drain, and Grease Trap.',
-        'Water group includes: Water Line Meter and Water Meter Tap.',
-        'Gas group includes: Temp Gas, Gas Riser, Underground Gas Line, and Gas System Indoor.',
-        'Others group includes: Water Heater, Tankless Water Heater, Recirculation Pump System (all with % Based / Independent toggle), and Water Heater Replacement (Garage and/or Attic — enter qty and unit price for each location separately).',
-        'Remodeling / Fixtures group includes: Fixture Replacement, Toilet Replacement, Kitchen Faucet Replacement, and Garbage Disposal Replacement.',
-        'Check the box next to a service to enable it and enter quantity and unit price.',
-        'For New Construction, base services (Water Line, Gas Indoor, Water Heater, Manablok) have a % Based / Independent toggle.',
-        '% Based rolls the service into the base total and splits it across the 30/50/20 phase schedule. Independent bills it as a separate line item outside the phase split.',
-        'All Remodeling / Fixtures and tap services are always billed independently and appear on Service/Replacement documents.',
+        'Click your contractor name in the toolbar to assign it to this document.',
+        'Enter the Client name, Client Email (for automated emails), and job Address.',
+        'Optionally set a Schedule Date — the job will appear on the calendar view.',
+        'Choose the Project Type: New Construction or Existing - Service.',
+        'For New Construction: set Houses, Fixtures per House, and Price per Fixture. The base total calculates automatically.',
+        'Scroll to Independent Services. Enable any services that apply and set billing mode (see Services section below).',
+        'Use the Add-ons section for permit fees, extra materials, travel charges, or anything not in the standard list.',
+        'Enter job-specific Notes — they appear on the printed quote and in client emails.',
+        'Click Save Document. The quote gets a QT-### number and is saved to the cloud.',
+        'Click Print / PDF to preview or download the quote as a PDF.',
       ]
     },
     {
-      title: 'Scheduling a Job',
-      desc: 'Assign a start date to any plumbing job and track all active jobs on a monthly calendar.',
+      title: 'Services — % Based vs Independent',
+      icon: '⚙️',
+      desc: 'For New Construction jobs, base services can be billed two different ways. Understanding this keeps your phase invoices accurate.',
+      tip: '% Based is the most common choice. Use Independent when a service is a separate contract item that you bill regardless of phase.',
       steps: [
-        'Enter a date in the Schedule Date field at the top of the form (next to Client and Address).',
-        'Save the document — the date is stored with the document in Supabase.',
-        'Click Schedule in the toolbar to open the calendar view.',
-        'Documents with scheduled dates appear as colored blocks on their day (gold = quote, blue = invoice).',
-        'Click any day to see the jobs scheduled for that date including client, document number, and total.',
-        'Payment phase alerts fire automatically when a scheduled date is reached.',
+        'Services are organized into five groups: Sewer, Water, Gas, Others, and Remodeling / Fixtures.',
+        '% Based: the service amount is added into the base total and split across your phase schedule (e.g. 30% Underground / 50% Rough-In / 20% Trim). It shows as "in base" on the invoice.',
+        'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
+        'Base services with the % / Independent toggle: Water Line Meter, Water Heater, Tankless WH, Recirculation Pump, Manablok, Gas System Indoor.',
+        'Always-Independent services (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, Cut & Bust, and all Remodeling / Fixtures items.',
+        'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
+        'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
+        'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
+        'Add-ons handle anything that doesn\'t fit the standard list — permits, materials, travel, inspections.',
       ]
     },
     {
-      title: 'Managing Clients',
-      desc: 'View a full CRM summary of every plumbing client — quote history, invoices, and payment totals — built automatically from your saved documents.',
+      title: 'Request Client Signature',
+      icon: '✍️',
+      desc: 'Get a digital signature on any quote — your client signs from their phone in seconds. No account or app required on their end.',
+      tip: 'The signature link works on any device. Once signed, the quote is locked — the signature appears on every printed PDF.',
       steps: [
-        'Click Clients in the toolbar.',
-        'The client list shows each client with quote count, invoice count, total billed, and total paid.',
-        'Rows are sorted by total billed — your biggest clients appear first.',
-        'Click any client row to see their full document history.',
-        'Click Open on any document to load it directly into the form.',
-        'Click ← All Clients to return to the list.',
+        'Build and save the quote first — the Signature button requires a saved document.',
+        'Click Signature in the toolbar. A unique one-time link is generated for this document.',
+        'Click Copy Link and paste it into a text message or email to your client.',
+        'The client opens the link on any device. They see a summary of the quote with your company name and total.',
+        'The client types their full name and draws their signature with a finger (mobile) or mouse (desktop), then taps Submit.',
+        'Once signed, the Signature button in your toolbar turns green with a ✓ checkmark.',
+        'The signer\'s name, signature image, and date automatically appear at the bottom of every printed or PDF version of this document.',
+        'Click the Signature button again at any time to preview the saved signature or copy the link again.',
+        'The signature is permanently tied to this document — it cannot be altered or removed.',
       ]
     },
     {
-      title: 'Using the Dashboard',
-      desc: 'Get a real-time overview of your plumbing business — monthly billings, income trends, and overdue phase payments across all active jobs.',
+      title: 'Convert Quote to Invoice',
+      icon: '🔄',
+      desc: 'Turn an accepted quote into a phase invoice — Underground, Rough-In, or Trim — with the exact amount due for that phase.',
       steps: [
-        'Click Dashboard in the toolbar.',
-        'The stat cards show this month\'s quote count, invoice count, total billed, total paid, and total pending.',
-        'The bar chart shows billed (gold) vs paid (green) income for the last 6 months. Hover a bar for the exact amount.',
-        'Upcoming Payments lists all overdue and future phase payments across all scheduled documents.',
-        'Red badges mean the payment is overdue; amber means due today; gold means upcoming.',
-        'Click Mark Paid next to any phase when payment is received — this is recorded in the document history.',
-        'An alert banner also appears at the top of the app whenever phases are overdue or due within 7 days.',
+        'Open the saved quote from the Saved Documents table at the bottom of the page.',
+        'Click Convert to Invoice in the toolbar. The document becomes an Invoice with a new INV-### number.',
+        'For New Construction, phase checkboxes appear — check only the phases being billed on this invoice (e.g. Rough-In only).',
+        'The invoice total automatically updates to show only the selected phase amount plus any Independent services.',
+        'You can convert the same original quote into multiple invoices over time — one invoice per phase.',
+        'Update the Schedule Date to reflect the payment due date if needed.',
+        'Save the document — the invoice is stored as a separate record from the original quote.',
+        'Deliver the invoice via Print / PDF, Send Email, or Send Payment Link.',
+      ]
+    },
+    {
+      title: 'Send Payment Link',
+      icon: '💳',
+      desc: 'Generate a secure Stripe checkout link so clients can pay online — when they pay, the invoice is automatically marked Paid.',
+      tip: 'Payment links expire after 24 hours. If the client hasn\'t paid yet, click $ Pay Link again to generate a fresh link.',
+      steps: [
+        'Open a saved Invoice document ($ Pay Link is only available on invoices, not quotes).',
+        'Click $ Pay Link in the toolbar. FieldQuote contacts Stripe and creates a checkout page for the exact invoice amount.',
+        'A panel appears with the payment link. Click Copy Link.',
+        'Paste the link into a text message or email and send it to your client.',
+        'The client opens the link on any device and pays securely with a credit or debit card. No account required on their end.',
+        'Once payment is complete, Stripe notifies FieldQuote automatically.',
+        'The invoice status changes to Paid and a green badge appears in your Saved Documents table — no manual action needed.',
+        'Your client receives an automatic payment confirmation email (if their email was entered on the document).',
+        'Payment links expire after 24 hours. Click $ Pay Link again to generate a new one if needed.',
+      ]
+    },
+    {
+      title: 'Send Email to Client',
+      icon: '📧',
+      desc: 'Send a professional branded FieldQuote email directly to your client — invoice summary, job details, and a Pay Now button included.',
+      tip: 'Enter the client\'s email on the document before saving to unlock automatic emails when converting to invoice or marking Paid.',
+      steps: [
+        'Make sure the client\'s email address is entered in the Client Email field on the document, then save.',
+        'Click Send Email in the toolbar.',
+        'If a client email is on file, a professional HTML email is sent directly to the client — no email app opens on your end.',
+        'Quote emails include: your company name, the quote total, job address, payment schedule, and any notes.',
+        'Invoice emails include all of the above plus a large gold Pay Now button that links directly to the Stripe payment page.',
+        'The payment link is embedded in the email automatically — no extra steps needed.',
+        'If no client email is on file, clicking Send Email opens your device\'s default email app with the details pre-filled.',
+        'Automatic emails: when a Quote is converted to Invoice (with email on file), an invoice email is sent automatically.',
+        'Automatic emails: when an invoice is marked Paid (via Stripe or manually), a payment receipt confirmation is sent automatically.',
       ]
     },
     {
       title: 'Mileage Tracking & IRS Export',
-      desc: 'Log job-site trips per document and export an annual mileage report formatted for IRS Schedule C / Form 2106.',
+      icon: '🚗',
+      desc: 'Log every job-site trip and export a complete annual mileage report formatted for IRS Schedule C / Form 2106.',
+      tip: 'The IRS standard mileage rate is $0.70/mile for 2025. The PDF export calculates your total deduction automatically.',
       steps: [
-        'Save a document first — the Mileage Log section appears below the document once it has been saved.',
+        'Save a document first — the Mileage Log section appears below the document after saving.',
         'Click Log Trip to expand the entry form.',
-        'Enter the Origin, Destination, and Miles for the trip. The Purpose is automatically set to the client name.',
-        'Click Add Trip — the trip is saved and appears in the table below the form.',
+        'Enter the Origin (e.g. your shop or home address), Destination (the job site), and Miles for the trip.',
+        'The Purpose is automatically set to the client name — edit it if needed.',
+        'Click Add Trip — the trip is saved instantly and appears in the log table below.',
+        'Log as many trips per document as needed — each is timestamped and tracked separately.',
         'Click ✕ on any row to permanently delete that trip.',
-        'To see all trips across all jobs, open the Dashboard and scroll to the Mileage Tracking section.',
-        'Use the year selector in the Dashboard to switch between tax years.',
-        'Click Export PDF to generate a printable mileage log with the IRS standard rate ($0.70/mile), total miles, and estimated deduction.',
-        'The exported report includes every trip for that year and is labeled for Schedule C / Form 2106 use.',
+        'To see all trips across every job at once, open the Dashboard and scroll to the Mileage Tracking section.',
+        'Use the year selector to switch between tax years.',
+        'Click Export PDF to generate a printable report with the IRS standard rate, total miles, and total estimated deduction.',
+        'The exported report lists every trip for the year and is formatted for IRS Schedule C or Form 2106 use.',
       ]
     },
     {
-      title: 'Adding Job Photos',
-      desc: 'Upload before/after job site photos per plumbing client and optionally include them in printed quotes and invoices.',
+      title: 'Job Photos',
+      icon: '📷',
+      desc: 'Upload before/after job site photos. Photos are tied to the client name and appear on every document for that client.',
       steps: [
-        'Enter a client name in the Client field — the Client Photos section appears below.',
-        'Click + Add Photos to select one or more images from your device.',
-        'Photos are stored in Supabase and load automatically for that client on any document.',
-        'Click the ✕ button on a thumbnail to permanently delete a photo.',
-        'Check the Photos box in the toolbar to include photos in the print/PDF output.',
+        'Enter a client name in the Client field — the Client Photos section appears below the main form.',
+        'Click + Add Photos to select one or more images from your device (JPG, PNG, and HEIC supported).',
+        'Photos upload to secure cloud storage and appear as thumbnails in the Client Photos section.',
+        'Photos are linked to the client name — they automatically appear on any FieldQuote document with the same client.',
+        'On mobile, you can take a new photo with your camera and upload it directly.',
+        'To delete a photo, click the ✕ button on its thumbnail. Deletion is permanent.',
+        'To include photos in the printed PDF, check the Photos toggle in the toolbar before printing.',
         'Photos appear in a Work Photos section at the end of the printed document.',
       ]
     },
     {
-      title: 'Printing and Emailing',
-      desc: 'Deliver polished plumbing quotes and invoices to your clients as PDFs or with a pre-filled email summary.',
-      steps: [
-        'Save the document first to ensure all data is current.',
-        'Click Print / PDF in the toolbar or at the bottom of the page.',
-        'In your browser\'s print dialog, choose Save as PDF to create a shareable file.',
-        'To email, click Send Email — your default email app opens with subject, client name, total, and payment schedule pre-filled.',
-        'The email body includes all payment schedule line items and a contact note.',
-        'Toggle Photos in the toolbar before printing if you want job photos on the last page.',
-      ]
-    },
-    {
       title: 'Using Add-ons',
-      desc: 'Add-ons are extra charges not in the standard plumbing services list — things like permit fees, extra materials, or travel charges.',
+      icon: '➕',
+      desc: 'Add custom line items not in the standard services list — permits, extra materials, travel charges, or anything else.',
       steps: [
-        'Scroll to the Add-ons section below Independent Services.',
-        'Enter a description for the charge (e.g. "City Permit Fee", "Extra PEX tubing", "Travel charge").',
-        'Set the quantity and unit price, then click Add.',
-        'The add-on appears as a line item on the quote or invoice.',
-        'Add-ons are included in the document total and printed as their own section.',
+        'Scroll to the Add-ons section, located below Independent Services.',
+        'Enter a description (e.g. "City Permit Fee", "Extra PEX material", "After-hours charge").',
+        'Set the Quantity and Unit Price.',
+        'Click Add — the item appears as a line item on the document and is included in the total.',
+        'Add-ons appear as their own section on the printed PDF.',
+        'Add-ons are not split across phase invoices — they appear on whichever document they\'re added to.',
         'Click Remove next to any add-on to delete it from the document.',
       ]
     },
     {
-      title: 'Settings — Company Profile & Logo',
-      desc: 'Update your company name, contractor names, and company logo. Your logo appears on all client-facing documents.',
+      title: 'Schedule & Calendar',
+      icon: '📅',
+      desc: 'Assign start dates to jobs and view all upcoming work on a monthly calendar.',
+      steps: [
+        'Enter a date in the Schedule Date field at the top of the form (next to Client and Address).',
+        'Save the document — the date is stored with the job.',
+        'Click Schedule in the toolbar to open the monthly calendar view.',
+        'Documents with scheduled dates appear as colored blocks — gold for quotes, blue for invoices.',
+        'Click any calendar day to see all jobs scheduled for that date, with client name, document number, and total.',
+        'Click any job in the calendar popup to open it directly in the form.',
+        'An alert banner appears at the top of the app when phase payments are overdue or due within 7 days.',
+      ]
+    },
+    {
+      title: 'Clients CRM',
+      icon: '👤',
+      desc: 'A built-in client list automatically assembled from your saved documents — no manual data entry.',
+      steps: [
+        'Click Clients in the toolbar.',
+        'Each row shows a unique client with their total quote count, invoice count, total billed, and total paid.',
+        'Clients are sorted by total billed — your highest-value clients appear first.',
+        'Click any client row to see their complete document history.',
+        'Click Open on any document to load it into the main form.',
+        'Click ← All Clients to return to the list.',
+        'Client records are built automatically from your saved documents — the list updates every time you save a new document.',
+      ]
+    },
+    {
+      title: 'Dashboard & Analytics',
+      icon: '📊',
+      desc: 'Business overview at a glance — monthly revenue, 6-month income chart, payment alerts, and mileage summary.',
+      steps: [
+        'Click Dashboard in the toolbar.',
+        'The stat cards show this month\'s quote count, invoice count, total billed, total paid, and total pending.',
+        'The bar chart shows billed (gold) vs paid (green) income for the last 6 months. Hover any bar for the exact dollar amount.',
+        'Upcoming Payments lists all overdue and future phase payments across every active job.',
+        'Red = overdue. Amber = due today. Gold = upcoming.',
+        'Click Mark Paid next to any phase when payment is received — this is recorded in the document history.',
+        'A red banner also appears at the top of the main app whenever any phase is overdue or due within 7 days.',
+        'Scroll down to the Mileage Tracking section to see all logged trips, filter by year, and export your IRS report.',
+      ]
+    },
+    {
+      title: 'Settings — Profile & Logo',
+      icon: '🏢',
+      desc: 'Set your company name, contractor names, and company logo. These appear on all client-facing documents and emails.',
       steps: [
         'Click Settings in the toolbar.',
         'Under Company Profile, enter your company name and up to three contractor names.',
-        'Contractor Name 1 is required — it appears as the default selected contractor.',
-        'Names 2 and 3 are optional. Click the ✕ next to a name to remove it.',
-        'Click Save Changes. Your contractor name buttons in the toolbar update immediately.',
-        'Under Company Logo, click Upload Logo to select a PNG, JPG, or SVG (max 2 MB).',
-        'Once uploaded, your logo replaces the FieldQuote logo on all printed PDFs and the client signature page.',
-        'The FieldQuote logo in the app header remains — it is the app branding and is not affected by your upload.',
-        'Click Change Logo to swap it out, or Remove to go back to the FieldQuote default on documents.',
+        'Contractor Name 1 is required — it is the default in the toolbar.',
+        'Names 2 and 3 are optional (for other plumbers on your team).',
+        'Click Save Changes — your contractor buttons update immediately.',
+        'Under Company Logo, click Upload Logo to select an image (PNG, JPG, or SVG, max 2 MB).',
+        'Your logo replaces the FieldQuote logo on all printed PDFs and the client signature page.',
+        'The FieldQuote logo in the app header is app branding and is not affected by your upload.',
+        'Click Change Logo to swap it, or Remove to revert to the FieldQuote default.',
       ]
     },
     {
       title: 'Billing — Trial & Subscription',
-      desc: 'FieldQuote includes a free trial. Subscribe to keep full access once the trial ends.',
+      icon: '💰',
+      desc: 'FieldQuote includes a free trial with full access. Subscribe to keep full access once your trial ends.',
       steps: [
-        'Your free trial starts automatically when you first sign up — no credit card required.',
+        'Your free trial starts the moment you sign up — no credit card required.',
         'The trial banner at the top of the app shows how many days remain.',
-        'Click Settings in the toolbar to see your current plan status under Billing.',
-        'When the trial ends, click Subscribe — $29/month to be taken to Stripe checkout.',
-        'After subscribing, the status badge changes to Active and the trial banner disappears.',
+        'Click Settings → Billing to see your current plan status.',
+        'When the trial ends, click Subscribe — $29/month — to go to the Stripe checkout.',
+        'After subscribing, an Active badge appears and the trial banner disappears.',
         'To update your payment method, download receipts, or cancel, click Manage Billing inside Settings.',
-        'Only the account admin can see and manage billing — team members do not have access.',
-      ]
-    },
-    {
-      title: 'Digital Signature',
-      desc: 'Send a signature link to your client so they can sign the quote on their phone. The signature is saved and appears on the printed PDF.',
-      steps: [
-        'Build and save the quote you want the client to sign.',
-        'Click the Signature button in the toolbar (shows a checkmark once signed).',
-        'A unique link is generated — click Copy Link to copy it to your clipboard.',
-        'Send the link to your client by text or email. No login is required on their end.',
-        'The client opens the link on any device, reviews the quote summary, types their name, and signs with their finger or mouse.',
-        'Once submitted, the Signature button turns green with a checkmark.',
-        'The signature, signer name, and date automatically appear at the bottom of the printed PDF.',
-        'To see the signature preview inside the app, open the Signature panel again.',
+        'Only the account Owner can view and manage billing — Team Members do not have access to billing settings.',
+        'Every team member you invite gets full app access through your subscription at no extra charge.',
       ]
     },
     {
       title: 'Team Members & Roles',
-      desc: 'Invite your crew to FieldQuote. There are two roles: Owner (full access) and Team Member (limited access). Invited users join free — no subscription required.',
+      icon: '👥',
+      desc: 'Invite your crew to FieldQuote. Every invited team member gets full app access through your subscription — no extra cost, no separate sign-up fee.',
+      tip: 'There are only two roles: Owner and Team Member. The Owner is whoever created the FieldQuote account.',
       steps: [
-        'Click Settings in the toolbar — the Team section appears at the bottom (Owner only).',
-        'Enter a team member\'s email address and click Invite — an invitation email is sent to them automatically.',
-        'The invited person clicks the link in the email, signs in or creates a free account, and is added to your team instantly.',
-        'Team Members bypass the Stripe payment screen — they never need a subscription of their own.',
-        'Owners have full access: create/edit/delete documents, manage billing, invite and remove team members.',
-        'Team Members can create and edit quotes and invoices and log their own mileage, but cannot delete documents, access billing, or invite others.',
-        'Active members share the same document pool — all quotes and invoices are visible to everyone on the team.',
-        'To remove a team member, click Remove next to their name in the Team list. Their account becomes an independent FieldQuote account.',
+        'OWNER — Full access: create, edit, and delete documents; manage billing and subscription; invite and remove team members; change company settings; access all features.',
+        'TEAM MEMBER — Standard access: create and edit quotes and invoices, log mileage, upload photos. Cannot delete documents, access billing, invite others, or change team settings.',
+        'To invite someone: click Settings in the toolbar, scroll to the Team section, enter their email address, and click Invite.',
+        'The invited person receives an email with a sign-in link. They create a free FieldQuote account (or sign in with an existing one) and are added to your team instantly.',
+        'Team Members never see the payment or subscription screen — they get full app access the moment they accept the invite.',
+        'All team members\' names appear as selectable contractor buttons in the toolbar, making it easy to assign the right person to each job.',
+        'Everyone on the team shares the same document pool — every quote and invoice is visible to all team members.',
+        'To remove a team member: click Remove next to their name in Settings → Team. Their account becomes a standalone FieldQuote account with its own trial period.',
       ]
     },
   ]
@@ -3175,7 +3267,9 @@ function HelpPanel({ onClose }) {
         <h4 style={{ color:GOLD, margin:0 }}>Help &amp; Tutorial</h4>
         <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
       </div>
-      <p style={{ color:'#7f98b0', margin:'0 0 14px', fontSize:13 }}>Click a section to expand it.</p>
+      <p style={{ color:'#7f98b0', margin:'0 0 14px', fontSize:13 }}>
+        Start with section <strong style={{color:GOLD}}>1 — Complete Workflow</strong> if you're new. Tap any section to expand it.
+      </p>
       <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
         {sections.map((s, i) => {
           const isOpen = openSections.has(i)
@@ -3183,12 +3277,13 @@ function HelpPanel({ onClose }) {
             <div key={i} style={{ background:'#071827', borderRadius:8, overflow:'hidden', border:`1px solid ${isOpen ? GOLD+'44' : 'transparent'}` }}>
               <button onClick={()=>toggle(i)} style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:'transparent', border:'none', cursor:'pointer', textAlign:'left' }}>
                 <span style={{ background: isOpen ? GOLD : 'transparent', color: isOpen ? NAVY : GOLD, fontWeight:700, fontSize:12, width:24, height:24, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, border:`1px solid ${GOLD}`, transition:'all 0.15s' }}>{i + 1}</span>
-                <span style={{ color: isOpen ? GOLD : '#d0dce8', fontWeight:600, fontSize:14, flex:1 }}>{s.title}</span>
+                <span style={{ color: isOpen ? GOLD : '#d0dce8', fontWeight:600, fontSize:14, flex:1 }}>{s.icon ? s.icon + ' ' : ''}{s.title}</span>
                 <span style={{ color:'#7f98b0', fontSize:12, userSelect:'none' }}>{isOpen ? '▲' : '▼'}</span>
               </button>
               {isOpen && (
                 <div style={{ padding:'0 18px 18px 52px' }}>
                   <p style={{ color:'#9fb0c6', margin:'0 0 12px', fontSize:13, lineHeight:1.6 }}>{s.desc}</p>
+                  {s.tip && <div style={TIP_STYLE}>💡 {s.tip}</div>}
                   <ol style={{ margin:0, padding:'0 0 0 20px' }}>
                     {s.steps.map((step, j) => (
                       <li key={j} style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.9, paddingLeft:4 }}>{step}</li>
