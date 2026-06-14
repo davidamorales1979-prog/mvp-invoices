@@ -1657,6 +1657,7 @@ export default function AppNew(){
               docs={savedDocs} alerts={paymentAlerts}
               onMarkPaid={markPhasePaid} onClose={() => setActiveView(null)}
               user={user} accountId={accountId}
+              userRole={userRole} contractorNames={contractorNames}
             />
           )}
           {activeView === 'schedule' && (
@@ -3172,13 +3173,15 @@ function SignaturePage({ token }) {
   )
 }
 
-function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId }) {
+function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId, userRole, contractorNames }) {
   const now = new Date()
   const yr = now.getFullYear()
   const mo = now.getMonth()
 
   const [allTrips, setAllTrips] = useState([])
   const [mileYear, setMileYear] = useState(yr)
+  const [reportYear, setReportYear]   = useState(yr)
+  const [reportMonth, setReportMonth] = useState(0) // 0 = all months
 
   useEffect(() => {
     if (!user || !accountId) return
@@ -3402,6 +3405,103 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId }) 
           </>
         )}
       </div>
+
+      {/* Contractor Reports — owner/admin only */}
+      {userRole !== 'member' && contractorNames && contractorNames.length > 0 && (() => {
+        const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        const availableYears = [...new Set(docs.map(d => d.created_at ? new Date(d.created_at).getFullYear() : null).filter(Boolean))].sort((a,b)=>b-a)
+        if (!availableYears.includes(reportYear)) availableYears.unshift(reportYear)
+
+        const filtered = docs.filter(d => {
+          if (!d.created_at) return false
+          const dt = new Date(d.created_at)
+          if (dt.getFullYear() !== reportYear) return false
+          if (reportMonth !== 0 && dt.getMonth() + 1 !== reportMonth) return false
+          return true
+        })
+
+        const allNames = [...new Set([...contractorNames, ...filtered.map(d => d.contractor).filter(Boolean)])]
+        const rows = allNames.map(name => {
+          const mine = filtered.filter(d => d.contractor === name)
+          const quotes   = mine.filter(d => d.doc_type !== 'invoice').length
+          const invoices = mine.filter(d => d.doc_type === 'invoice').length
+          const billed   = mine.reduce((s, d) => s + (Number(d.total) || 0), 0)
+          const paid     = mine.filter(d => d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
+          const pending  = billed - paid
+          return { name, quotes, invoices, billed, paid, pending }
+        })
+
+        const totals = rows.reduce((acc, r) => ({
+          quotes:   acc.quotes   + r.quotes,
+          invoices: acc.invoices + r.invoices,
+          billed:   acc.billed   + r.billed,
+          paid:     acc.paid     + r.paid,
+          pending:  acc.pending  + r.pending,
+        }), { quotes:0, invoices:0, billed:0, paid:0, pending:0 })
+
+        const thS = { textAlign:'left',  padding:'8px 10px', color:GOLD, fontWeight:700, fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', borderBottom:`1px solid ${GOLD}33`, whiteSpace:'nowrap' }
+        const thR = { ...thS, textAlign:'right' }
+        const tdS = (c='#e2e8f0') => ({ padding:'9px 10px', color:c, fontSize:13, borderBottom:'1px solid rgba(255,255,255,0.04)' })
+        const tdR = (c='#e2e8f0') => ({ ...tdS(c), textAlign:'right' })
+
+        return (
+          <div style={{ background:'#071827', borderRadius:8, padding:16, marginTop:14 }}>
+            <div style={{ display:'flex', flexWrap:'wrap', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:14 }}>
+              <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px' }}>Contractor Performance</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <select value={reportMonth} onChange={e=>setReportMonth(Number(e.target.value))}
+                  style={{ background:'#0f2740', color:'#fff', border:'1px solid #334', padding:'4px 8px', borderRadius:6, fontSize:12 }}>
+                  <option value={0}>All Months</option>
+                  {MONTH_LABELS.map((lbl, i) => <option key={i+1} value={i+1}>{lbl}</option>)}
+                </select>
+                <select value={reportYear} onChange={e=>setReportYear(Number(e.target.value))}
+                  style={{ background:'#0f2740', color:'#fff', border:'1px solid #334', padding:'4px 8px', borderRadius:6, fontSize:12 }}>
+                  {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', minWidth:480 }}>
+                <thead>
+                  <tr>
+                    <th style={thS}>Contractor</th>
+                    <th style={thR}>Quotes</th>
+                    <th style={thR}>Invoices</th>
+                    <th style={thR}>Billed</th>
+                    <th style={thR}>Paid</th>
+                    <th style={thR}>Pending</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.name}>
+                      <td style={tdS('#fff')}><strong>{r.name}</strong></td>
+                      <td style={tdR(GOLD)}>{r.quotes}</td>
+                      <td style={tdR(GOLD)}>{r.invoices}</td>
+                      <td style={tdR()}>{formatCurrency(r.billed)}</td>
+                      <td style={tdR('#4caf50')}>{formatCurrency(r.paid)}</td>
+                      <td style={tdR(r.pending > 0 ? '#e8a020' : '#556a80')}>{formatCurrency(r.pending)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop:`2px solid ${GOLD}44` }}>
+                    <td style={{ ...tdS('#9fb0c6'), fontWeight:700 }}>Total</td>
+                    <td style={{ ...tdR(GOLD), fontWeight:700 }}>{totals.quotes}</td>
+                    <td style={{ ...tdR(GOLD), fontWeight:700 }}>{totals.invoices}</td>
+                    <td style={{ ...tdR(), fontWeight:700 }}>{formatCurrency(totals.billed)}</td>
+                    <td style={{ ...tdR('#4caf50'), fontWeight:700 }}>{formatCurrency(totals.paid)}</td>
+                    <td style={{ ...tdR(totals.pending > 0 ? '#e8a020' : '#556a80'), fontWeight:700 }}>{formatCurrency(totals.pending)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {rows.every(r => r.quotes + r.invoices === 0) && (
+              <div style={{ color:'#7f98b0', fontSize:13, marginTop:8 }}>No documents found for this period.</div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
