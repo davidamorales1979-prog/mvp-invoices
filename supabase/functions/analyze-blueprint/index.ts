@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const ANALYSIS_PROMPT = `You are an expert plumbing estimator. Carefully analyze this architectural blueprint and identify ALL plumbing fixtures, rough-ins, connections, and systems visible in the plans.
+const ANALYSIS_PROMPT = `You are an expert plumbing estimator analyzing a floor plan to pre-fill a plumbing quote. Follow every rule below exactly — do not improvise.
 
 Return ONLY valid JSON (no markdown, no code blocks, no explanation) in this exact format:
 {
@@ -15,7 +15,7 @@ Return ONLY valid JSON (no markdown, no code blocks, no explanation) in this exa
   "summary": "<1-2 sentence project description>",
   "detected": [
     {
-      "service_id": "<service_id from the list below, or null if not in list>",
+      "service_id": "<service_id from the approved list below, or null>",
       "service_name": "<descriptive name>",
       "qty": <integer quantity>,
       "notes": "<brief note about location or how detected>"
@@ -23,59 +23,74 @@ Return ONLY valid JSON (no markdown, no code blocks, no explanation) in this exa
   ]
 }
 
-Map detected items to these service_id values when applicable:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 1 — NEVER INCLUDE THESE (omit entirely from detected[], do not set qty=0):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+× sewer / sewer_tap — requires site plan, not determinable from a floor plan
+× water / water_tap — requires site plan, not determinable from a floor plan
+× gas_underground — requires site plan, not determinable from a floor plan
+× cut_bust — contractor decision, not shown in floor plans
+× gas_indoor — cannot be confirmed from floor plan alone; use specific fix_gas_* IDs instead
 
-INFRASTRUCTURE & SYSTEMS:
-- sewer: Sewer line installation/connection
-- sewer_tap: Sewer tap to municipal main
-- storm: Storm drain system
-- catch_basin: Catch basin / area drain
-- grease: Grease trap
-- water: Water line / water meter installation
-- water_tap: Water meter tap
-- temp_gas: Temporary gas connection
-- gas_riser: Gas riser / exterior gas meter connection
-- gas_underground: Underground gas line
-- gas_indoor: General indoor gas rough-in distribution system (not individual appliances)
-- water_heater: Water heater unit — new construction install (not a fixture replacement)
-- tankless_wh: Tankless water heater
-- wh_replacement: Water heater replacement in existing building
-- recirc_pump: Hot water recirculation pump
-- manablok: Manablok or manifold distribution system
-- repiping: Full repiping project
-- cut_bust: Concrete cutting and busting required
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 2 — INFRASTRUCTURE (include only if explicitly shown on this floor plan):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- storm: Storm drain system — only if drain symbol visible on plan
+- catch_basin: Catch basin — only if CB symbol explicitly labeled
+- grease: Grease trap — only if GT symbol explicitly labeled
+- temp_gas: Temporary gas — only if labeled on plan
+- gas_riser: Gas riser / meter — only if meter symbol shown
+- water_heater: Water heater (new construction) — if WH symbol found; qty governed by Rule 4
+- tankless_wh: Tankless water heater — only if explicitly labeled TANKLESS or TW
+- wh_replacement: Water heater replacement — only if plan notes existing building
+- recirc_pump: Recirculation pump — only if RECIRC or RP symbol found
+- manablok: Manablok manifold — only if explicitly shown
+- repiping: Repiping — only if plan notes full repipe
+- grease: Grease trap — only if GT symbol shown
 
-WATER FIXTURES — count each unit individually, use these IDs:
-- fix_toilet: Toilet / Water Closet (count every WC)
-- fix_faucet: Faucet (generic/decorative faucet not covered by a more specific ID)
-- fix_bathroom_sink: Bathroom sink / lavatory / vanity sink / faucet
-- fix_shower: Shower (count each shower stall or shower-only unit)
-- fix_master_tub: Soaking tub / garden tub / master tub / jacuzzi / whirlpool
-- fix_kitchen_sink: Kitchen sink (indoor kitchen only)
-- fix_wet_bar: Wet bar sink / bar faucet
-- fix_laundry_sink: Laundry sink / utility sink / service sink
-- fix_ice_maker: Ice maker rough-in / refrigerator water line
-- fix_pot_filler: Pot filler (wall-mounted kitchen pot filler faucet)
-- fix_laundry: Laundry room / washer machine rough-in / washing machine connection
-- fix_kitchen_patio: Outdoor kitchen water connection / patio kitchen sink / exterior kitchen water
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 3 — GAS FIXTURES (only mark if clearly shown in the floor plan):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- fix_gas_furnace: Mark ONLY if a furnace symbol or label (FURN, FAU, AC/HEAT) is visible
+- fix_gas_wh: Mark ONLY if a gas water heater symbol is found (as an individual unit fixture)
+- fix_gas_stove: Mark ONLY if the kitchen has a gas range / stove symbol or label (GAS RNG, RANGE, STOVE)
+- fix_gas_dryer: Mark ONLY if laundry room is present (infer gas dryer hookup from laundry room)
+- fix_gas_bbq: Mark ONLY if outdoor BBQ / grill stub or label is shown on plan
+- fix_gas_generator: Mark ONLY if generator symbol or label is visible
+- fix_gas_kitchen_patio: Mark ONLY if outdoor kitchen gas stub is explicitly shown
 
-GAS FIXTURES — count each appliance individually, use these IDs:
-- fix_gas_furnace: Gas furnace / forced-air heating unit / HVAC gas unit
-- fix_gas_wh: Gas water heater (when counted as individual fixture)
-- fix_gas_dryer: Gas dryer connection
-- fix_gas_stove: Gas stove / range / cooktop / oven (indoor)
-- fix_gas_bbq: Outdoor gas BBQ / patio grill / gas grill connection
-- fix_gas_generator: Gas line for standby generator / whole-house generator
-- fix_gas_kitchen_patio: Outdoor kitchen gas connection / patio kitchen gas / alfresco gas
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 4 — QUANTITY RULES FOR WATER HEATER & LAUNDRY (based on bathroom count):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Count total bathrooms (full + half) first, then apply:
+- 1 to 3.5 bathrooms → water_heater qty = 1, fix_laundry qty = 1
+- 4+ bathrooms       → water_heater qty = 2, fix_laundry qty = 2
+These quantities override what you visually count from WH symbols.
 
-For items NOT in any list above (dishwashers, garbage disposals, water softeners, hose bibs, outdoor BBQ, irrigation, etc.) — set service_id to null and describe accurately in service_name. These become add-ons.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 5 — WATER FIXTURES (count exactly as shown in floor plan):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- fix_toilet: Every toilet / WC symbol — count exactly
+- fix_bathroom_sink: Every lavatory / vanity / bathroom sink — count exactly
+- fix_faucet: Generic faucet not covered by a more specific ID
+- fix_shower: Every shower stall (for tub+shower combos use fix_shower for the shower valve)
+- fix_master_tub: Every soaking tub / garden tub / whirlpool / jacuzzi — count exactly
+- fix_kitchen_sink: Every indoor kitchen sink — count exactly
+- fix_wet_bar: Every wet bar sink
+- fix_laundry_sink: Every laundry / utility / service sink
+- fix_ice_maker: Every ice maker or fridge water line rough-in
+- fix_pot_filler: Every pot filler symbol
+- fix_kitchen_patio: Outdoor kitchen water connection / patio kitchen sink
 
-Counting rules:
-- Count EVERY toilet, every sink, every shower, every tub as a separate line item with its own qty
-- For tub/shower combos: use fix_shower (the shower component is the plumbing work)
-- For multi-unit buildings: multiply per-unit fixture counts by the number of units
-- Gas fixtures: list each gas appliance type with its own count (range=1, dryer=1, furnace=1, etc.)
-- Be thorough — plumbers charge per fixture, so completeness matters
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 6 — ADD-ONS (set service_id to null):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Dishwashers, garbage disposals, water softeners, hose bibs, irrigation, and anything else not in the approved lists above → service_id: null. They become add-ons.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 7 — MULTI-UNIT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For multi-unit buildings, multiply per-unit fixture counts by the number of units before reporting qty.
 
 If you cannot identify plumbing fixtures (e.g., this is not a blueprint), return {"units":0,"unit_type":"unknown","summary":"No plumbing fixtures detected","detected":[]}`
 
