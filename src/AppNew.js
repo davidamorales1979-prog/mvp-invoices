@@ -183,6 +183,12 @@ export default function AppNew(){
   const [optionsToken, setOptionsToken] = useState(null)
   const [showOptionsModal, setShowOptionsModal] = useState(false)
   const [showOptionsEditor, setShowOptionsEditor] = useState(false)
+  const [showBlueprintModal, setShowBlueprintModal] = useState(false)
+  const [blueprintStep, setBlueprintStep] = useState('upload') // 'upload'|'analyzing'|'review'
+  const [blueprintFile, setBlueprintFile] = useState(null)
+  const [blueprintResults, setBlueprintResults] = useState(null)
+  const [blueprintReviewItems, setBlueprintReviewItems] = useState([])
+  const [blueprintError, setBlueprintError] = useState('')
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
@@ -1455,6 +1461,63 @@ export default function AppNew(){
     setShowOptionsModal(false)
   }
 
+  async function analyzeBlueprint() {
+    if (!blueprintFile) return
+    setBlueprintStep('analyzing')
+    setBlueprintError('')
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(blueprintFile)
+      })
+      const { data, error } = await supabase.functions.invoke('analyze-blueprint', {
+        body: { file_base64: base64, media_type: blueprintFile.type, filename: blueprintFile.name },
+      })
+      if (error || data?.error) throw new Error(error?.message || data?.error)
+      setBlueprintResults(data)
+      setBlueprintReviewItems(
+        (data.detected || []).map((item, idx) => ({ ...item, key: idx, include: item.qty > 0, confirmed_qty: item.qty }))
+      )
+      setBlueprintStep('review')
+    } catch (e) {
+      setBlueprintError(e.message || 'Analysis failed. Please try again.')
+      setBlueprintStep('upload')
+    }
+  }
+
+  function applyBlueprintToQuote() {
+    const toApply = blueprintReviewItems.filter(item => item.include && item.confirmed_qty > 0)
+    setServices(prev => {
+      const updated = prev.map(s => ({ ...s }))
+      toApply.forEach(item => {
+        if (!item.service_id) return
+        const idx = updated.findIndex(s => s.id === item.service_id)
+        if (idx === -1) return
+        const svc = updated[idx]
+        if (item.service_id === 'wh_replacement') {
+          updated[idx] = { ...svc, enabled: true, garageQty: item.confirmed_qty, garageUnit: svc.garageUnit || 0, atticQty: svc.atticQty || 0, atticUnit: svc.atticUnit || 0 }
+        } else {
+          updated[idx] = { ...svc, enabled: true, qty: item.confirmed_qty }
+        }
+      })
+      return updated
+    })
+    // Items without a service_id become add-ons
+    const extras = toApply.filter(item => !item.service_id)
+    if (extras.length > 0) {
+      setAddons(prev => [...prev, ...extras.map(e => ({ desc: e.service_name, qty: e.confirmed_qty, unit: 0 }))])
+    }
+    setShowBlueprintModal(false)
+    setBlueprintFile(null)
+    setBlueprintResults(null)
+    setBlueprintReviewItems([])
+    setBlueprintStep('upload')
+    const count = toApply.length
+    setSaveMessage(`Blueprint applied — ${count} item${count !== 1 ? 's' : ''} added. Enter prices to complete your quote.`)
+  }
+
   function handleQuickSaved(savedDoc) {
     applyDocumentData(savedDoc)
     counter.bump()
@@ -2067,7 +2130,13 @@ export default function AppNew(){
         </section>
 
         <section className={servicesTotal===0 ? 'no-print' : undefined} style={{ marginTop:14 }}>
-          <h4 style={{ color:GOLD }}>Independent Services</h4>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <h4 style={{ color:GOLD, margin:0 }}>Independent Services</h4>
+            <button className='no-print' onClick={() => { setShowBlueprintModal(true); setBlueprintStep('upload'); setBlueprintError('') }}
+              style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'6px 14px', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:600 }}>
+              📐 Analyze Blueprint
+            </button>
+          </div>
           <div style={{ background:'#041827', padding:8, borderRadius:6, marginTop:8 }}>
             {SERVICE_GROUPS.map(group => {
               const entries = group.ids
@@ -2542,6 +2611,168 @@ export default function AppNew(){
         </div>
 
       </div>
+
+      {/* Blueprint Analysis Modal */}
+      {showBlueprintModal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(4,24,39,0.97)', zIndex:1200, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+          {/* Header */}
+          <div style={{ flexShrink:0, background:'#041827', borderBottom:`1px solid ${GOLD}33`, padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ color:GOLD, fontWeight:700, fontSize:17 }}>📐 Analyze Blueprint</div>
+              <div style={{ color:'#7f98b0', fontSize:12, marginTop:2 }}>
+                {blueprintStep === 'upload'   && 'Upload a PDF blueprint or image — AI detects plumbing fixtures and pre-fills your quote'}
+                {blueprintStep === 'analyzing' && 'Sending to Claude AI for analysis…'}
+                {blueprintStep === 'review'   && `${blueprintResults?.summary || 'Review detected fixtures, adjust quantities, then apply to your quote'}`}
+              </div>
+            </div>
+            <button onClick={() => { setShowBlueprintModal(false); setBlueprintFile(null); setBlueprintStep('upload') }}
+              style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'6px 14px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+          </div>
+
+          {/* Body */}
+          <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+            {/* UPLOAD STEP */}
+            {blueprintStep === 'upload' && (
+              <div style={{ maxWidth:520, margin:'0 auto' }}>
+                {blueprintError && (
+                  <div style={{ background:'#2a0a0a', border:'1px solid #c0392b', borderRadius:8, padding:'12px 16px', marginBottom:16, color:'#e74c3c', fontSize:14 }}>
+                    ⚠ {blueprintError}
+                  </div>
+                )}
+                <label style={{ display:'block', cursor:'pointer' }}>
+                  <div style={{ background:'#071827', border:`2px dashed ${blueprintFile ? GOLD : '#334'}`, borderRadius:12, padding:40, textAlign:'center', transition:'border-color 0.2s' }}
+                    onDragOver={e=>{e.preventDefault()}}
+                    onDrop={e=>{e.preventDefault(); const f=e.dataTransfer.files[0]; if(f) setBlueprintFile(f)}}>
+                    {blueprintFile ? (
+                      <>
+                        <div style={{ fontSize:36, marginBottom:8 }}>{blueprintFile.type === 'application/pdf' ? '📄' : '🖼️'}</div>
+                        <div style={{ color:GOLD, fontWeight:700, fontSize:15, marginBottom:4 }}>{blueprintFile.name}</div>
+                        <div style={{ color:'#7f98b0', fontSize:13 }}>{(blueprintFile.size / 1024 / 1024).toFixed(1)} MB</div>
+                        {blueprintFile.size > 20 * 1024 * 1024 && (
+                          <div style={{ color:'#e8a020', fontSize:12, marginTop:8 }}>⚠ Large file — analysis may be slower</div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize:48, marginBottom:12 }}>📐</div>
+                        <div style={{ color:'#fff', fontWeight:600, fontSize:15, marginBottom:6 }}>Drop blueprint here or click to browse</div>
+                        <div style={{ color:'#7f98b0', fontSize:13 }}>PDF, JPG, PNG, WEBP · Max 20 MB recommended</div>
+                      </>
+                    )}
+                  </div>
+                  <input type='file' accept='.pdf,image/jpeg,image/png,image/webp,image/gif' style={{ display:'none' }}
+                    onChange={e=>{const f=e.target.files[0]; if(f) setBlueprintFile(f)}} />
+                </label>
+                <div style={{ marginTop:16, color:'#556a80', fontSize:12, lineHeight:1.6 }}>
+                  <strong style={{ color:'#7f98b0' }}>What Claude detects:</strong> toilets, sinks, showers/tubs, kitchen fixtures, garbage disposals,
+                  water heaters, gas connections, sewer lines, storm drains, catch basins, hose bibs, pot fillers, and more — per room and per unit.
+                </div>
+              </div>
+            )}
+
+            {/* ANALYZING STEP */}
+            {blueprintStep === 'analyzing' && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300, gap:20 }}>
+                <div style={{ width:56, height:56, border:`4px solid ${GOLD}33`, borderTop:`4px solid ${GOLD}`, borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+                <div style={{ color:GOLD, fontWeight:700, fontSize:16 }}>Analyzing blueprint…</div>
+                <div style={{ color:'#7f98b0', fontSize:13 }}>Claude is reading the plans. This takes 10–30 seconds.</div>
+              </div>
+            )}
+
+            {/* REVIEW STEP */}
+            {blueprintStep === 'review' && blueprintReviewItems.length > 0 && (() => {
+              const KNOWN_IDS = new Set(blueprintReviewItems.filter(i=>i.service_id).map(i=>i.service_id))
+              return (
+                <div>
+                  {blueprintResults?.units > 1 && (
+                    <div style={{ background:'#071827', border:`1px solid ${GOLD}44`, borderRadius:8, padding:'10px 16px', marginBottom:16, color:GOLD, fontSize:13 }}>
+                      📋 {blueprintResults.units} units detected · {blueprintResults.unit_type}
+                    </div>
+                  )}
+                  <div style={{ color:'#7f98b0', fontSize:12, marginBottom:12 }}>
+                    Review detected fixtures. Adjust quantities as needed, uncheck to skip any item, then click <strong style={{ color:'#fff' }}>Apply to Quote</strong>.
+                    Items without a matching service become <strong style={{ color:'#fff' }}>add-ons</strong>.
+                  </div>
+                  <div style={{ overflowX:'auto' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', minWidth:500 }}>
+                      <thead>
+                        <tr style={{ borderBottom:`1px solid ${GOLD}33` }}>
+                          <th style={{ width:32, padding:'8px 6px', color:GOLD, fontSize:11, textTransform:'uppercase', textAlign:'center' }}></th>
+                          <th style={{ padding:'8px 10px', color:GOLD, fontSize:11, textTransform:'uppercase', textAlign:'left' }}>Fixture / Service</th>
+                          <th style={{ padding:'8px 10px', color:GOLD, fontSize:11, textTransform:'uppercase', textAlign:'center', width:80 }}>Qty</th>
+                          <th style={{ padding:'8px 10px', color:GOLD, fontSize:11, textTransform:'uppercase', textAlign:'left' }}>Notes</th>
+                          <th style={{ padding:'8px 10px', color:GOLD, fontSize:11, textTransform:'uppercase', textAlign:'left', width:90 }}>Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {blueprintReviewItems.map((item, idx) => {
+                          const isService = !!item.service_id
+                          return (
+                            <tr key={item.key} style={{ borderBottom:'1px solid rgba(255,255,255,0.04)', opacity: item.include ? 1 : 0.4, transition:'opacity 0.15s' }}>
+                              <td style={{ padding:'8px 6px', textAlign:'center' }}>
+                                <input type='checkbox' checked={item.include}
+                                  onChange={e => setBlueprintReviewItems(prev => prev.map((r,i) => i===idx ? { ...r, include:e.target.checked } : r))}
+                                  style={{ accentColor:GOLD, width:15, height:15 }} />
+                              </td>
+                              <td style={{ padding:'8px 10px', color:'#e2e8f0', fontSize:13, fontWeight:600 }}>{item.service_name}</td>
+                              <td style={{ padding:'8px 10px', textAlign:'center' }}>
+                                <input type='number' min={0} value={item.confirmed_qty}
+                                  onChange={e => setBlueprintReviewItems(prev => prev.map((r,i) => i===idx ? { ...r, confirmed_qty: Number(e.target.value)||0 } : r))}
+                                  style={{ width:60, padding:'4px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, textAlign:'center', fontWeight:700, fontSize:14 }} />
+                              </td>
+                              <td style={{ padding:'8px 10px', color:'#7f98b0', fontSize:12 }}>{item.notes}</td>
+                              <td style={{ padding:'8px 10px' }}>
+                                <span style={{ display:'inline-block', background: isService ? '#0d2b1a' : '#1a2840', color: isService ? '#4caf50' : '#7f98b0', border:`1px solid ${isService ? '#4caf50' : '#334'}`, borderRadius:10, padding:'2px 8px', fontSize:10, fontWeight:600 }}>
+                                  {isService ? '✓ Service' : '+ Add-on'}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop:12, color:'#556a80', fontSize:12 }}>
+                    {blueprintReviewItems.filter(i=>i.include && i.service_id).length} services · {blueprintReviewItems.filter(i=>i.include && !i.service_id).length} add-ons selected
+                  </div>
+                </div>
+              )
+            })()}
+
+            {blueprintStep === 'review' && blueprintReviewItems.length === 0 && (
+              <div style={{ textAlign:'center', padding:40, color:'#7f98b0' }}>
+                <div style={{ fontSize:36, marginBottom:12 }}>🔍</div>
+                No plumbing fixtures were detected in this file. Try a clearer image or different page.
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div style={{ flexShrink:0, background:'#041827', borderTop:`1px solid ${GOLD}33`, padding:'14px 20px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            {blueprintStep === 'upload' && (
+              <>
+                <div style={{ color:'#556a80', fontSize:13 }}>{blueprintFile ? `${blueprintFile.name} ready` : 'No file selected'}</div>
+                <button onClick={analyzeBlueprint} disabled={!blueprintFile}
+                  style={{ background: blueprintFile ? GOLD : '#1a2840', color: blueprintFile ? NAVY : '#445', border:'none', padding:'11px 28px', borderRadius:8, cursor: blueprintFile ? 'pointer' : 'default', fontWeight:700, fontSize:15 }}>
+                  Analyze with AI
+                </button>
+              </>
+            )}
+            {blueprintStep === 'review' && (
+              <>
+                <button onClick={() => { setBlueprintStep('upload'); setBlueprintFile(null); setBlueprintResults(null); setBlueprintReviewItems([]) }}
+                  style={{ background:'transparent', color:'#7f98b0', border:'1px solid #334', padding:'10px 20px', borderRadius:8, cursor:'pointer' }}>
+                  ← Upload Different File
+                </button>
+                <button onClick={applyBlueprintToQuote} disabled={blueprintReviewItems.filter(i=>i.include && i.confirmed_qty > 0).length === 0}
+                  style={{ background:GOLD, color:NAVY, border:'none', padding:'11px 28px', borderRadius:8, cursor:'pointer', fontWeight:700, fontSize:15 }}>
+                  Apply to Quote ({blueprintReviewItems.filter(i=>i.include && i.confirmed_qty > 0).length} items)
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Options Editor Overlay */}
       {showOptionsEditor && quoteOptions?.length > 0 && (() => {

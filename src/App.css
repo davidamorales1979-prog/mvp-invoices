@@ -203,3 +203,7 @@
   .options-editor-grid { grid-template-columns:1fr; }
   .options-client-grid { grid-template-columns:1fr !important; }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
