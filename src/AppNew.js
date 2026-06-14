@@ -2681,7 +2681,6 @@ export default function AppNew(){
 
             {/* REVIEW STEP */}
             {blueprintStep === 'review' && blueprintReviewItems.length > 0 && (() => {
-              const KNOWN_IDS = new Set(blueprintReviewItems.filter(i=>i.service_id).map(i=>i.service_id))
               return (
                 <div>
                   {blueprintResults?.units > 1 && (
