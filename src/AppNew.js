@@ -2258,17 +2258,20 @@ function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContract
   const isNC = qProjectType === 'New Construction'
 
   const qTotal = useMemo(() => {
+    const whAmt = (s) => s.id === 'wh_replacement' ? (s.garageQty || 0) * (s.garageUnit || 0) + (s.atticQty || 0) * (s.atticUnit || 0) : 0
     if (isNC) {
       const base = qHouses * qFixtures * qPrice
       const extra = qSvc.reduce((sum, s) => {
-        if (!s.enabled || s.id === 'wh_replacement') return sum
+        if (!s.enabled) return sum
+        if (s.id === 'wh_replacement') return sum + whAmt(s)
         if (BASE_SERVICE_IDS.includes(s.id)) return sum
         return sum + (s.qty || 0) * (s.unit || 0)
       }, 0)
       return base + extra
     }
     return qSvc.reduce((sum, s) => {
-      if (!s.enabled || s.id === 'wh_replacement') return sum
+      if (!s.enabled) return sum
+      if (s.id === 'wh_replacement') return sum + whAmt(s)
       return sum + (s.qty || 0) * (s.unit || 0)
     }, 0)
   }, [isNC, qHouses, qFixtures, qPrice, qSvc])
@@ -2337,7 +2340,7 @@ function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContract
 
   const inputStyle = { width: '100%', background: '#0d1f30', color: '#fff', border: '1px solid #2a3f58', borderRadius: 8, padding: '10px 12px', fontSize: 15, boxSizing: 'border-box' }
   const labelStyle = { color: '#7f98b0', fontSize: 12, display: 'block', marginBottom: 4 }
-  const QE_GROUPS = SERVICE_GROUPS.map(g => ({ ...g, ids: g.ids.filter(id => id !== 'wh_replacement') }))
+  const QE_GROUPS = SERVICE_GROUPS
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: NAVY, display: 'flex', flexDirection: 'column' }}>
@@ -2426,6 +2429,8 @@ function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContract
                 <div style={{ color: '#556a80', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700, marginBottom: 6 }}>{group.label}</div>
                 {groupSvcs.map(s => {
                   const isTap = s.id === 'water_tap' || s.id === 'sewer_tap'
+                  const isWHR = s.id === 'wh_replacement'
+                  const whrTotal = isWHR ? (s.garageQty || 0) * (s.garageUnit || 0) + (s.atticQty || 0) * (s.atticUnit || 0) : 0
                   return (
                     <div key={s.id} style={{ marginBottom: 6 }}>
                       <div onClick={() => toggleSvc(s.id)} style={{
@@ -2444,8 +2449,10 @@ function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContract
                           {s.enabled && <span style={{ color: NAVY, fontSize: 11, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                         </div>
                         <span style={{ color: s.enabled ? '#e2e8f0' : '#9fb0c6', fontSize: 14, flex: 1 }}>{s.name}</span>
-                        {s.enabled && !isTap && (
-                          <span style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>{formatCurrency((s.qty || 0) * (s.unit || 0))}</span>
+                        {s.enabled && (
+                          <span style={{ color: GOLD, fontSize: 13, fontWeight: 600 }}>
+                            {isWHR ? formatCurrency(whrTotal) : isTap ? '' : formatCurrency((s.qty || 0) * (s.unit || 0))}
+                          </span>
                         )}
                       </div>
                       {s.enabled && (
@@ -2453,7 +2460,30 @@ function QuickEstimateModal({ onClose, onSaved, contractorNames, defaultContract
                           background: '#041827', border: `1px solid ${GOLD}`, borderTop: 'none',
                           borderRadius: '0 0 8px 8px', padding: '10px 12px',
                         }}>
-                          {isTap ? (
+                          {isWHR ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {[['Garage', 'garageQty', 'garageUnit'], ['Attic', 'atticQty', 'atticUnit']].map(([label, qKey, uKey]) => (
+                                <div key={label}>
+                                  <div style={{ color: '#556a80', fontSize: 11, fontWeight: 700, marginBottom: 5 }}>{label}</div>
+                                  <div style={{ display: 'flex', gap: 8 }}>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ color: '#556a80', fontSize: 11, marginBottom: 3 }}>Qty</div>
+                                      <input type='number' value={s[qKey] || 0} onChange={e => updateSvc(s.id, qKey, Number(e.target.value))}
+                                        style={{ ...inputStyle, fontSize: 14 }} />
+                                    </div>
+                                    <div style={{ flex: 2 }}>
+                                      <div style={{ color: '#556a80', fontSize: 11, marginBottom: 3 }}>Unit Price ($)</div>
+                                      <input type='number' value={s[uKey] || 0} onChange={e => updateSvc(s.id, uKey, Number(e.target.value))}
+                                        style={{ ...inputStyle, fontSize: 14 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+                                      <span style={{ color: GOLD, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency((s[qKey] || 0) * (s[uKey] || 0))}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : isTap ? (
                             <input value={s.desc || ''} onChange={e => updateSvc(s.id, 'desc', e.target.value)}
                               placeholder={s.id === 'sewer_tap' ? 'Depth (e.g. 8 ft deep)' : 'Distance (e.g. 150 ft from meter)'}
                               style={{ ...inputStyle, fontSize: 14 }} />
