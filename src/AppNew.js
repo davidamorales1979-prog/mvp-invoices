@@ -37,19 +37,26 @@ const SERVICES = [
   { id: 'repiping',        name: 'Repiping',                      unit: 1500 },
   { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
   // Water Fixtures
-  { id: 'fix_toilet',       name: 'Toilet',                       unit: 0 },
-  { id: 'fix_faucet',       name: 'Faucet',                       unit: 0 },
-  { id: 'fix_shower',       name: 'Shower',                       unit: 0 },
-  { id: 'fix_master_tub',   name: 'Master Tub',                   unit: 0 },
-  { id: 'fix_kitchen_sink', name: 'Kitchen Sink',                 unit: 0 },
-  { id: 'fix_ice_maker',    name: 'Ice Maker',                    unit: 0 },
-  { id: 'fix_pot_filler',   name: 'Pot Filler',                   unit: 0 },
-  { id: 'fix_laundry',      name: 'Laundry Room / Washer',        unit: 0 },
+  { id: 'fix_toilet',          name: 'Toilet',                         unit: 0 },
+  { id: 'fix_faucet',          name: 'Faucet',                         unit: 0 },
+  { id: 'fix_bathroom_sink',   name: 'Bathroom Sink / Faucet',         unit: 0 },
+  { id: 'fix_shower',          name: 'Shower',                         unit: 0 },
+  { id: 'fix_master_tub',      name: 'Master Tub',                     unit: 0 },
+  { id: 'fix_kitchen_sink',    name: 'Kitchen Sink',                   unit: 0 },
+  { id: 'fix_wet_bar',         name: 'Wet Bar',                        unit: 0 },
+  { id: 'fix_laundry_sink',    name: 'Laundry Sink',                   unit: 0 },
+  { id: 'fix_ice_maker',       name: 'Ice Maker',                      unit: 0 },
+  { id: 'fix_pot_filler',      name: 'Pot Filler',                     unit: 0 },
+  { id: 'fix_laundry',         name: 'Laundry Room / Washer',          unit: 0 },
+  { id: 'fix_kitchen_patio',   name: 'Kitchen Patio (Outdoor Water)',   unit: 0 },
   // Gas Fixtures
-  { id: 'fix_gas_furnace',  name: 'Gas Furnace',                  unit: 0 },
-  { id: 'fix_gas_wh',       name: 'Gas Water Heater',             unit: 0 },
-  { id: 'fix_gas_dryer',    name: 'Gas Dryer',                    unit: 0 },
-  { id: 'fix_gas_stove',    name: 'Gas Stove',                    unit: 0 },
+  { id: 'fix_gas_furnace',     name: 'Gas Furnace',                    unit: 0 },
+  { id: 'fix_gas_wh',          name: 'Gas Water Heater',               unit: 0 },
+  { id: 'fix_gas_dryer',       name: 'Gas Dryer',                      unit: 0 },
+  { id: 'fix_gas_stove',       name: 'Gas Stove',                      unit: 0 },
+  { id: 'fix_gas_bbq',         name: 'Gas Patio BBQ / Grill',          unit: 0 },
+  { id: 'fix_gas_generator',   name: 'Gas Line Generator',             unit: 0 },
+  { id: 'fix_gas_kitchen_patio', name: 'Gas Kitchen Patio (Outdoor)',  unit: 0 },
 ]
 
 const SERVICE_GROUPS = [
@@ -57,8 +64,8 @@ const SERVICE_GROUPS = [
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
-  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry'] },
-  { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove'] },
+  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio'] },
+  { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio'] },
 ]
 
 const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor']

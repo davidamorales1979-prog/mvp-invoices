@@ -47,19 +47,26 @@ INFRASTRUCTURE & SYSTEMS:
 
 WATER FIXTURES — count each unit individually, use these IDs:
 - fix_toilet: Toilet / Water Closet (count every WC)
-- fix_faucet: Faucet / Lavatory sink (count each lav, bathroom sink, bar sink, utility sink)
+- fix_faucet: Faucet (generic/decorative faucet not covered by a more specific ID)
+- fix_bathroom_sink: Bathroom sink / lavatory / vanity sink / faucet
 - fix_shower: Shower (count each shower stall or shower-only unit)
-- fix_master_tub: Soaking tub / garden tub / master tub / jacuzzi
-- fix_kitchen_sink: Kitchen sink (count each kitchen sink)
+- fix_master_tub: Soaking tub / garden tub / master tub / jacuzzi / whirlpool
+- fix_kitchen_sink: Kitchen sink (indoor kitchen only)
+- fix_wet_bar: Wet bar sink / bar faucet
+- fix_laundry_sink: Laundry sink / utility sink / service sink
 - fix_ice_maker: Ice maker rough-in / refrigerator water line
 - fix_pot_filler: Pot filler (wall-mounted kitchen pot filler faucet)
 - fix_laundry: Laundry room / washer machine rough-in / washing machine connection
+- fix_kitchen_patio: Outdoor kitchen water connection / patio kitchen sink / exterior kitchen water
 
 GAS FIXTURES — count each appliance individually, use these IDs:
-- fix_gas_furnace: Gas furnace / HVAC unit
+- fix_gas_furnace: Gas furnace / forced-air heating unit / HVAC gas unit
 - fix_gas_wh: Gas water heater (when counted as individual fixture)
 - fix_gas_dryer: Gas dryer connection
-- fix_gas_stove: Gas stove / range / cooktop / oven
+- fix_gas_stove: Gas stove / range / cooktop / oven (indoor)
+- fix_gas_bbq: Outdoor gas BBQ / patio grill / gas grill connection
+- fix_gas_generator: Gas line for standby generator / whole-house generator
+- fix_gas_kitchen_patio: Outdoor kitchen gas connection / patio kitchen gas / alfresco gas
 
 For items NOT in any list above (dishwashers, garbage disposals, water softeners, hose bibs, outdoor BBQ, irrigation, etc.) — set service_id to null and describe accurately in service_name. These become add-ons.
 
