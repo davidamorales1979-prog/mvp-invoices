@@ -176,6 +176,7 @@ export default function AppNew(){
   const [showPaymentLinkModal, setShowPaymentLinkModal] = useState(false)
   const [paymentLinkUrl, setPaymentLinkUrl] = useState(null)
   const [paymentLinkLoading, setPaymentLinkLoading] = useState(false)
+  const [clientEmail, setClientEmail] = useState('')
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
@@ -646,6 +647,7 @@ export default function AppNew(){
     setSignerName(data.signer_name ?? '')
     const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
     setPaymentLinkUrl(savedLink?.url ?? null)
+    setClientEmail(data.client_email ?? '')
     setSaveMessage(`Loaded document ${data.doc_number || ''}`)
   }
 
@@ -859,6 +861,7 @@ export default function AppNew(){
       setSignerName(data.signer_name ?? '')
       const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
       setPaymentLinkUrl(savedLink?.url ?? null)
+      setClientEmail(data.client_email ?? '')
     }
 
     async function init() {
@@ -908,6 +911,7 @@ export default function AppNew(){
       signature_data: signatureData,
       signed_at: signedAt,
       signer_name: signerName || null,
+      client_email: clientEmail || null,
       ...overrides
     }
 
@@ -954,8 +958,52 @@ export default function AppNew(){
     if (docType !== 'invoice'){
       counter.bump()
       setDocType('invoice')
-      pushHistory('converted:quote->invoice')
-      await persistDocument({ doc_type: 'invoice' })
+      const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
+      const newHistory = [convertEntry, ...history]
+      setHistory(newHistory)
+      const docId = await persistDocument({ doc_type: 'invoice', history: newHistory })
+      if (!docId) return
+
+      if (clientEmail) {
+        // Auto-generate a payment link for the invoice email
+        let payLink = newHistory.find(h => h.entry === 'payment_link_created')?.url
+        if (!payLink) {
+          try {
+            const { data: plData } = await supabase.functions.invoke('create-invoice-payment', {
+              body: { doc_id: docId, amount_cents: Math.round(displayTotal * 100), doc_number: docNumber, client_name: client }
+            })
+            if (plData?.url) {
+              payLink = plData.url
+              const withLink = [{ ts: new Date().toISOString(), entry: 'payment_link_created', status: 'draft', docNumber, url: payLink }, ...newHistory]
+              setHistory(withLink)
+              persistDocument({ history: withLink })
+              setPaymentLinkUrl(payLink)
+            }
+          } catch (e) { console.error('auto payment link on convert:', e) }
+        }
+
+        // Send invoice email with payment link
+        try {
+          await supabase.functions.invoke('send-client-email', {
+            body: {
+              type: 'invoice',
+              to: clientEmail,
+              client_name: client,
+              doc_number: docNumber,
+              total: displayTotal,
+              address,
+              notes,
+              payment_link: payLink,
+              contractor_name: contractor,
+              company_name: profileCompany || contractor,
+              payment_schedule: buildPaymentSchedule(),
+            }
+          })
+          setSaveMessage(`Invoice emailed to ${clientEmail}`)
+        } catch (e) {
+          console.error('invoice email on convert:', e)
+        }
+      }
     }
   }
   function printDoc(){ pushHistory('printed'); window.print() }
@@ -1029,6 +1077,7 @@ export default function AppNew(){
     setShowSigModal(false)
     setShowPaymentLinkModal(false)
     setPaymentLinkUrl(null)
+    setClientEmail('')
     pushHistory('reset:number')
   }
 
@@ -1104,17 +1153,51 @@ export default function AppNew(){
     setTrips(t => t.filter(x => x.id !== id))
   }
 
-  function sendEmail(){
-    const subject = `${docNumber} - ${contractor}`
-    const paymentLines = []
+  function buildPaymentSchedule() {
     if (projectType === 'New Construction') {
-      if (includeUnderground) paymentLines.push(`  - ${undergroundPct}% Underground: ${formatCurrency(schedule.underground)}`)
-      if (includeRough) paymentLines.push(`  - ${roughPct}% Rough-In: ${formatCurrency(schedule.rough)}`)
-      if (includeTrim) paymentLines.push(`  - ${trimPct}% Trim: ${formatCurrency(schedule.trim)}`)
-    } else {
-      paymentLines.push(`  - ${serviceStartPercent}% Start: ${formatCurrency(schedule.start)}`)
-      paymentLines.push(`  - ${serviceCompletionPercent}% Completion: ${formatCurrency(schedule.completion)}`)
+      const ps = []
+      if (includeUnderground) ps.push({ name: `${undergroundPct}% Underground`, amount: schedule.underground })
+      if (includeRough)       ps.push({ name: `${roughPct}% Rough-In`, amount: schedule.rough })
+      if (includeTrim)        ps.push({ name: `${trimPct}% Trim`, amount: schedule.trim })
+      return ps
     }
+    return [
+      { name: `${serviceStartPercent}% Start`, amount: schedule.start },
+      { name: `${serviceCompletionPercent}% Completion`, amount: schedule.completion },
+    ]
+  }
+
+  async function sendEmail(){
+    if (clientEmail) {
+      // Send branded HTML email via Resend
+      const payLink = docType === 'invoice' ? history.find(h => h.entry === 'payment_link_created')?.url : null
+      setSaveMessage('Sending email…')
+      try {
+        const { error } = await supabase.functions.invoke('send-client-email', {
+          body: {
+            type: docType === 'invoice' ? 'invoice' : 'quote',
+            to: clientEmail,
+            client_name: client,
+            doc_number: docNumber,
+            total: displayTotal,
+            address,
+            notes,
+            payment_link: payLink,
+            contractor_name: contractor,
+            company_name: profileCompany || contractor,
+            payment_schedule: buildPaymentSchedule(),
+          }
+        })
+        if (error) throw new Error(error.message)
+        setSaveMessage(`Email sent to ${clientEmail}`)
+      } catch (e) {
+        setSaveMessage('Email failed: ' + e.message)
+      }
+      return
+    }
+    // Fallback: open device mail app when no client email is on file
+    const subject = `${docNumber} - ${contractor}`
+    const paymentLines = buildPaymentSchedule().map(p => `  - ${p.name}: ${formatCurrency(p.amount)}`)
     const bodyParts = [
       `Dear ${client || 'Client'},`,
       '',
@@ -1132,6 +1215,28 @@ export default function AppNew(){
     bodyParts.push('', 'Please contact us if you have any questions.', '', contractor)
     const body = bodyParts.filter(l => l !== null).join('\n')
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  }
+
+  async function markDocumentPaid() {
+    setDocStatus('paid')
+    if (clientEmail) {
+      try {
+        await supabase.functions.invoke('send-client-email', {
+          body: {
+            type: 'payment_receipt',
+            to: clientEmail,
+            client_name: client,
+            doc_number: docNumber,
+            total: displayTotal,
+            contractor_name: contractor,
+            company_name: profileCompany || contractor,
+          }
+        })
+        setSaveMessage(`Payment receipt sent to ${clientEmail}`)
+      } catch (e) {
+        console.error('receipt email failed:', e)
+      }
+    }
   }
 
   if (signToken) return <SignaturePage token={signToken} />
@@ -1488,10 +1593,15 @@ export default function AppNew(){
         })()}
 
 
-        <div className='form-grid-3' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12 }}>
+        <div className='form-grid-3' style={{ marginTop:14, display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:12 }}>
           <div>
             <label style={{ color:'#9fb0c6' }}>Client</label>
             <input value={client} onChange={e=>setClient(e.target.value)} style={{ width:'100%', padding:8, marginTop:6 }} />
+          </div>
+          <div className='no-print'>
+            <label style={{ color:'#9fb0c6' }}>Client Email <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for auto emails</span></label>
+            <input type='email' value={clientEmail} onChange={e=>setClientEmail(e.target.value)} placeholder='client@example.com'
+              style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
           <div>
             <label style={{ color:'#9fb0c6' }}>Address</label>
@@ -1742,7 +1852,7 @@ export default function AppNew(){
             <div className='no-print' style={{ marginTop:8, display:'flex', gap:8 }}>
               <button onClick={()=>setDocStatus('sent')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Sent</button>
               <button onClick={()=>setDocStatus('approved')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Approved</button>
-              <button onClick={()=>setDocStatus('paid')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Paid</button>
+              <button onClick={markDocumentPaid} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Mark Paid</button>
             </div> 
           </div>
         </section>
