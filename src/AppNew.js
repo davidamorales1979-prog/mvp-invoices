@@ -36,11 +36,20 @@ const SERVICES = [
   { id: 'manablok',        name: 'Manablok System',               unit: 950 },
   { id: 'repiping',        name: 'Repiping',                      unit: 1500 },
   { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
-  // Remodeling / Fixtures
-  { id: 'fixture_replace',    name: 'Fixture Replacement',            unit: 0 },
-  { id: 'toilet_replace',     name: 'Toilet Replacement',             unit: 0 },
-  { id: 'kitchen_faucet',     name: 'Kitchen Faucet Replacement',     unit: 0 },
-  { id: 'garbage_disposal',   name: 'Garbage Disposal Replacement',   unit: 0 },
+  // Water Fixtures
+  { id: 'fix_toilet',       name: 'Toilet',                       unit: 0 },
+  { id: 'fix_faucet',       name: 'Faucet',                       unit: 0 },
+  { id: 'fix_shower',       name: 'Shower',                       unit: 0 },
+  { id: 'fix_master_tub',   name: 'Master Tub',                   unit: 0 },
+  { id: 'fix_kitchen_sink', name: 'Kitchen Sink',                 unit: 0 },
+  { id: 'fix_ice_maker',    name: 'Ice Maker',                    unit: 0 },
+  { id: 'fix_pot_filler',   name: 'Pot Filler',                   unit: 0 },
+  { id: 'fix_laundry',      name: 'Laundry Room / Washer',        unit: 0 },
+  // Gas Fixtures
+  { id: 'fix_gas_furnace',  name: 'Gas Furnace',                  unit: 0 },
+  { id: 'fix_gas_wh',       name: 'Gas Water Heater',             unit: 0 },
+  { id: 'fix_gas_dryer',    name: 'Gas Dryer',                    unit: 0 },
+  { id: 'fix_gas_stove',    name: 'Gas Stove',                    unit: 0 },
 ]
 
 const SERVICE_GROUPS = [
@@ -48,7 +57,8 @@ const SERVICE_GROUPS = [
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
-  { label: 'Remodeling / Fixtures', ids: ['fixture_replace', 'toilet_replace', 'kitchen_faucet', 'garbage_disposal'] },
+  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry'] },
+  { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove'] },
 ]
 
 const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor']
@@ -3808,11 +3818,11 @@ function HelpPanel({ onClose }) {
       desc: 'For New Construction jobs, base services can be billed two different ways. Understanding this keeps your phase invoices accurate.',
       tip: '% Based is the most common choice. Use Independent when a service is a separate contract item that you bill regardless of phase.',
       steps: [
-        'Services are organized into five groups: Sewer, Water, Gas, Others, and Remodeling / Fixtures.',
+        'Services are organized into six groups: Sewer, Water, Gas, Others, Water Fixtures, and Gas Fixtures.',
         '% Based: the service amount is added into the base total and split across your phase schedule (e.g. 30% Underground / 50% Rough-In / 20% Trim). It shows as "in base" on the invoice.',
         'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
         'Base services with the % / Independent toggle: Water Line Meter, Water Heater, Tankless WH, Recirculation Pump, Manablok, Gas System Indoor.',
-        'Always-Independent services (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, Cut & Bust, and all Remodeling / Fixtures items.',
+        'Always-Independent services (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, Cut & Bust, and all Water / Gas Fixture items.',
         'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
         'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
         'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
@@ -4032,7 +4042,7 @@ function HelpPanel({ onClose }) {
     { icon:'🚗', title:'Mileage Tracking for IRS', desc:'Log job-site trips (origin, destination, miles) directly on any saved document. View all trips in the Dashboard and export a full annual mileage report (PDF) formatted for IRS Schedule C / Form 2106.' },
     { icon:'👥', title:'Team Member Roles', desc:'Invite crew members for free under your subscription. Owners have full access. Team Members can create and edit documents and log mileage, but cannot delete records, manage billing, or invite others.' },
     { icon:'✍️', title:'Digital Signature Link', desc:'Click Signature in the toolbar to generate a one-time link. Text it to your client — they sign on their phone with no account or app required. The signature is saved and prints at the bottom of every PDF for that document.' },
-    { icon:'⚙️', title:'Service Groups — Sewer / Water / Gas / Others / Remodeling', desc:'All services are organized into 5 trade groups. For New Construction, base services have a % Based / Independent toggle — % Based splits the amount across your phase schedule; Independent bills it as a separate line item on whichever invoice you choose.' },
+    { icon:'⚙️', title:'Service Groups — Sewer / Water / Gas / Others / Fixtures', desc:'All services are organized into 6 trade groups. For New Construction, base services have a % Based / Independent toggle — % Based splits the amount across your phase schedule; Independent bills it as a separate line item on whichever invoice you choose.' },
   ]
 
   return (

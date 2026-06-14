@@ -24,6 +24,8 @@ Return ONLY valid JSON (no markdown, no code blocks, no explanation) in this exa
 }
 
 Map detected items to these service_id values when applicable:
+
+INFRASTRUCTURE & SYSTEMS:
 - sewer: Sewer line installation/connection
 - sewer_tap: Sewer tap to municipal main
 - storm: Storm drain system
@@ -34,27 +36,39 @@ Map detected items to these service_id values when applicable:
 - temp_gas: Temporary gas connection
 - gas_riser: Gas riser / exterior gas meter connection
 - gas_underground: Underground gas line
-- gas_indoor: Indoor gas rough-in / gas appliance connections (range, dryer, fireplace, BBQ, etc.)
-- water_heater: Water heater (new construction)
+- gas_indoor: General indoor gas rough-in distribution system (not individual appliances)
+- water_heater: Water heater unit — new construction install (not a fixture replacement)
 - tankless_wh: Tankless water heater
-- wh_replacement: Water heater replacement
+- wh_replacement: Water heater replacement in existing building
 - recirc_pump: Hot water recirculation pump
 - manablok: Manablok or manifold distribution system
 - repiping: Full repiping project
 - cut_bust: Concrete cutting and busting required
-- fixture_replace: General plumbing fixture installation (utility sinks, laundry, bar sinks)
-- toilet_replace: Toilet installation (count each toilet/WC individually)
-- kitchen_faucet: Kitchen sink and faucet (count each kitchen sink)
-- garbage_disposal: Garbage disposal unit
 
-For items NOT in the list (pot fillers, hose bibs, ice maker lines, outdoor kitchens, irrigation, etc.) — set service_id to null and describe accurately in service_name.
+WATER FIXTURES — count each unit individually, use these IDs:
+- fix_toilet: Toilet / Water Closet (count every WC)
+- fix_faucet: Faucet / Lavatory sink (count each lav, bathroom sink, bar sink, utility sink)
+- fix_shower: Shower (count each shower stall or shower-only unit)
+- fix_master_tub: Soaking tub / garden tub / master tub / jacuzzi
+- fix_kitchen_sink: Kitchen sink (count each kitchen sink)
+- fix_ice_maker: Ice maker rough-in / refrigerator water line
+- fix_pot_filler: Pot filler (wall-mounted kitchen pot filler faucet)
+- fix_laundry: Laundry room / washer machine rough-in / washing machine connection
+
+GAS FIXTURES — count each appliance individually, use these IDs:
+- fix_gas_furnace: Gas furnace / HVAC unit
+- fix_gas_wh: Gas water heater (when counted as individual fixture)
+- fix_gas_dryer: Gas dryer connection
+- fix_gas_stove: Gas stove / range / cooktop / oven
+
+For items NOT in any list above (dishwashers, garbage disposals, water softeners, hose bibs, outdoor BBQ, irrigation, etc.) — set service_id to null and describe accurately in service_name. These become add-ons.
 
 Counting rules:
-- Count each bathroom's toilet, lavatory sink, and tub/shower as separate line items
-- For multi-unit buildings, multiply per-unit counts by the number of units
-- Count every hose bib visible on exterior/site plans
-- Count each gas connection point (range, dryer, water heater, fireplace, BBQ hookup, etc.) separately under gas_indoor if indoor, gas_underground if exterior run
-- Be thorough — plumbers charge per fixture, so accuracy matters
+- Count EVERY toilet, every sink, every shower, every tub as a separate line item with its own qty
+- For tub/shower combos: use fix_shower (the shower component is the plumbing work)
+- For multi-unit buildings: multiply per-unit fixture counts by the number of units
+- Gas fixtures: list each gas appliance type with its own count (range=1, dryer=1, furnace=1, etc.)
+- Be thorough — plumbers charge per fixture, so completeness matters
 
 If you cannot identify plumbing fixtures (e.g., this is not a blueprint), return {"units":0,"unit_type":"unknown","summary":"No plumbing fixtures detected","detected":[]}`
 
