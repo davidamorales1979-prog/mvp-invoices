@@ -3261,13 +3261,43 @@ function HelpPanel({ onClose }) {
     },
   ]
 
+  const WHATS_NEW = [
+    { icon:'⚡', title:'Quick Estimate — Mobile Button', desc:'Tap the ⚡ button (bottom-right on your phone) to build a quote on-site in under 2 minutes. Supports fixture pricing, all service groups, and a live running total.' },
+    { icon:'💳', title:'Send Payment Link (Stripe)', desc:'Click $ Pay Link on any invoice to generate a secure Stripe checkout page for the exact amount. When the client pays, the invoice auto-marks Paid and a receipt email is sent — no manual steps needed.' },
+    { icon:'📧', title:'Automatic Client Emails', desc:'Add a client email to the document and FieldQuote sends emails automatically: a branded invoice email (with Pay Now button) when you convert a quote, and a payment receipt when the invoice is marked Paid. Manual "Send Email" in the toolbar works for any document.' },
+    { icon:'🚗', title:'Mileage Tracking for IRS', desc:'Log job-site trips (origin, destination, miles) directly on any saved document. View all trips in the Dashboard and export a full annual mileage report (PDF) formatted for IRS Schedule C / Form 2106.' },
+    { icon:'👥', title:'Team Member Roles', desc:'Invite crew members for free under your subscription. Owners have full access. Team Members can create and edit documents and log mileage, but cannot delete records, manage billing, or invite others.' },
+    { icon:'✍️', title:'Digital Signature Link', desc:'Click Signature in the toolbar to generate a one-time link. Text it to your client — they sign on their phone with no account or app required. The signature is saved and prints at the bottom of every PDF for that document.' },
+    { icon:'⚙️', title:'Service Groups — Sewer / Water / Gas / Others / Remodeling', desc:'All services are organized into 5 trade groups. For New Construction, base services have a % Based / Independent toggle — % Based splits the amount across your phase schedule; Independent bills it as a separate line item on whichever invoice you choose.' },
+  ]
+
   return (
     <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
         <h4 style={{ color:GOLD, margin:0 }}>Help &amp; Tutorial</h4>
         <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
       </div>
-      <p style={{ color:'#7f98b0', margin:'0 0 14px', fontSize:13 }}>
+
+      {/* What's New card */}
+      <div style={{ background:'#071827', borderRadius:10, border:`1px solid ${GOLD}55`, marginBottom:18, overflow:'hidden' }}>
+        <div style={{ background:`${GOLD}18`, borderBottom:`1px solid ${GOLD}33`, padding:'10px 16px', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ background:GOLD, color:NAVY, fontSize:10, fontWeight:900, letterSpacing:'0.9px', padding:'3px 9px', borderRadius:20, textTransform:'uppercase', flexShrink:0 }}>What's New</span>
+          <span style={{ color:'#7f98b0', fontSize:12 }}>Latest features added to FieldQuote</span>
+        </div>
+        <div style={{ padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+          {WHATS_NEW.map((item, i) => (
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
+              <span style={{ fontSize:20, lineHeight:1, flexShrink:0, marginTop:1 }}>{item.icon}</span>
+              <div>
+                <div style={{ color:GOLD, fontWeight:700, fontSize:13, marginBottom:2 }}>{item.title}</div>
+                <div style={{ color:'#9fb0c6', fontSize:12, lineHeight:1.6 }}>{item.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <p style={{ color:'#7f98b0', margin:'0 0 12px', fontSize:13 }}>
         Start with section <strong style={{color:GOLD}}>1 — Complete Workflow</strong> if you're new. Tap any section to expand it.
       </p>
       <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
