@@ -3881,12 +3881,34 @@ function HelpPanel({ onClose }) {
         'Services are organized into six groups: Sewer, Water, Gas, Others, Water Fixtures, and Gas Fixtures.',
         '% Based: the service amount is added into the base total and split across your phase schedule (e.g. 30% Underground / 50% Rough-In / 20% Trim). It shows as "in base" on the invoice.',
         'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
-        'Base services with the % / Independent toggle: Water Line Meter, Water Heater, Tankless WH, Recirculation Pump, Manablok, Gas System Indoor.',
-        'Always-Independent services (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, Cut & Bust, and all Water / Gas Fixture items.',
+        'Services with the % Based / Independent toggle (New Construction only): Water Line Meter, Water Heater, Tankless WH, Recirculation Pump, Manablok, Gas System Indoor, Hose Bib, and ALL Gas Fixtures (Gas Furnace, Gas Water Heater, Gas Dryer, Gas Stove, Gas Patio BBQ/Grill, Gas Line Generator, Gas Kitchen Patio).',
+        'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture.',
+        'GAS FIXTURES — dual billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a single price for all gas fixtures. In % Based mode, total gas fixture amount (qty × price) is added to the base and splits across your phase schedule. Switch any individual fixture to Independent to bill it separately outside the phase split.',
+        'HOSE BIB — dual billing: Works the same as Gas Fixtures. Toggle % Based to include it in the base total, or Independent to bill it as a separate line item.',
+        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, and Cut & Bust.',
         'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
         'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
         'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
         'Add-ons handle anything that doesn\'t fit the standard list — permits, materials, travel, inspections.',
+      ]
+    },
+    {
+      title: 'Analyze Blueprint — AI Fixture Detection',
+      icon: '📐',
+      desc: 'Upload a floor plan PDF or image and Claude AI detects all water and gas fixtures automatically — pre-filling quantities so you only need to enter prices.',
+      tip: 'Blueprint analysis reads fixture counts from the plan. It never guesses infrastructure (sewer, water meter, underground gas) — those require a site plan, not a floor plan.',
+      steps: [
+        'Click 📐 Analyze Blueprint on the quote form (New Construction mode recommended).',
+        'Upload a PDF architectural floor plan or a photo/scan of the plan (JPG, PNG, PDF supported).',
+        'Claude AI analyzes the plan and detects: toilets, showers, tubs, sinks, laundry, pot fillers, hose bibs, outdoor water connections, gas furnaces, gas water heaters, gas dryers, gas stoves, gas BBQs, generators, and outdoor gas connections.',
+        'Review detected items — you can adjust quantities or uncheck any item before applying.',
+        'Click Apply to Quote — all checked fixtures are added with correct quantities. Houses and Fixtures/House fields are filled automatically.',
+        'Prices stay at $0 after blueprint apply. Enter "Price / Fixture" to calculate water fixtures, and "Price / Gas Fixture" for gas fixtures. The Base, phase breakdown, and total all update in real time as you type.',
+        'BATHROOM RULE (automatic): 1–3.5 bathrooms detected → Water Heater qty 1, Laundry/Washer qty 1. 4+ bathrooms → Water Heater qty 2, Laundry/Washer qty 2.',
+        'NEVER auto-marked from a floor plan: Sewer Line, Water Meter, Underground Gas Line, Cut & Bust, or Gas System Indoor — these require a site plan and a contractor decision, not a floor plan.',
+        'Gas fixtures are only marked if clearly shown: furnace symbol (FURN/FAU), gas range label, laundry room present (for gas dryer), or explicit outdoor BBQ/generator stub on the plan.',
+        'Multi-unit plans: AI multiplies per-unit counts by the number of units and sets Houses automatically. Fixtures/House is the per-unit average.',
+        'After blueprint apply, switch individual gas fixtures between % Based and Independent as needed for your billing preference.',
       ]
     },
     {
@@ -4103,6 +4125,8 @@ function HelpPanel({ onClose }) {
     { icon:'👥', title:'Team Member Roles', desc:'Invite crew members for free under your subscription. Owners have full access. Team Members can create and edit documents and log mileage, but cannot delete records, manage billing, or invite others.' },
     { icon:'✍️', title:'Digital Signature Link', desc:'Click Signature in the toolbar to generate a one-time link. Text it to your client — they sign on their phone with no account or app required. The signature is saved and prints at the bottom of every PDF for that document.' },
     { icon:'⚙️', title:'Service Groups — Sewer / Water / Gas / Others / Fixtures', desc:'All services are organized into 6 trade groups. For New Construction, base services have a % Based / Independent toggle — % Based splits the amount across your phase schedule; Independent bills it as a separate line item on whichever invoice you choose.' },
+    { icon:'📐', title:'Analyze Blueprint — AI Fixture Detection', desc:'Upload a floor plan PDF or image and Claude AI detects water and gas fixtures automatically. Houses and Fixtures/House are filled in — just enter Price/Fixture and Price/Gas Fixture to calculate the full base total instantly.' },
+    { icon:'🔥', title:'Gas Fixtures — % Based or Independent Billing', desc:'All gas fixtures (Furnace, Water Heater, Dryer, Stove, BBQ, Generator, Outdoor Kitchen) now support both billing modes. Use "Price / Gas Fixture" to batch-set a shared price, or price each fixture individually. In % Based mode, gas fixture totals roll into the base and split across your phase schedule.' },
   ]
 
   return (
