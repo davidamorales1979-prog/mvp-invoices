@@ -69,7 +69,7 @@ const SERVICE_GROUPS = [
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'fix_hose_bib']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -208,6 +208,7 @@ export default function AppNew(){
   const [blueprintReviewItems, setBlueprintReviewItems] = useState([])
   const [blueprintError, setBlueprintError] = useState('')
   const [waterFixtureUnitPrice, setWaterFixtureUnitPrice] = useState(0)
+  const [gasFixtureUnitPrice, setGasFixtureUnitPrice] = useState(0)
   const [accountId, setAccountId] = useState(null)
   const [userRole, setUserRole] = useState('admin')
   const [logoUrl, setLogoUrl] = useState('')
@@ -1511,9 +1512,16 @@ export default function AppNew(){
       .filter(id => !BASE_SERVICE_IDS.includes(id))
   )
 
+  const GAS_FIX_IDS = new Set(SERVICE_GROUPS.find(g => g.label === 'Gas Fixtures')?.ids || [])
+
   function setAllWaterFixtureUnit(val) {
     setWaterFixtureUnitPrice(val)
     setServices(prev => prev.map(s => WATER_FIX_IDS.has(s.id) ? { ...s, unit: val } : s))
+  }
+
+  function setAllGasFixtureUnit(val) {
+    setGasFixtureUnitPrice(val)
+    setServices(prev => prev.map(s => GAS_FIX_IDS.has(s.id) ? { ...s, unit: val } : s))
   }
 
   function applyBlueprintToQuote() {
@@ -1544,6 +1552,7 @@ export default function AppNew(){
     if (waterFixCount > 0) setFixturesPerHouse(Math.round(waterFixCount / unitCount))
     // Reset prices — user fills them in
     setWaterFixtureUnitPrice(0)
+    setGasFixtureUnitPrice(0)
     setPricePerFixture(0)
     // Items without a service_id become add-ons
     const extras = toApply.filter(item => !item.service_id)
@@ -2193,6 +2202,16 @@ export default function AppNew(){
                         <input type='text'
                           value={formatMoneyInput(waterFixtureUnitPrice)}
                           onChange={e => setAllWaterFixtureUnit(parseMoneyInput(e.target.value))}
+                          placeholder='$0'
+                          style={{ width:88, padding:'2px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, fontSize:12, fontWeight:700, textAlign:'right' }} />
+                      </div>
+                    )}
+                    {group.label === 'Gas Fixtures' && (
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ color:'#7f98b0', fontSize:10, whiteSpace:'nowrap' }}>Price / Gas Fixture</span>
+                        <input type='text'
+                          value={formatMoneyInput(gasFixtureUnitPrice)}
+                          onChange={e => setAllGasFixtureUnit(parseMoneyInput(e.target.value))}
                           placeholder='$0'
                           style={{ width:88, padding:'2px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, fontSize:12, fontWeight:700, textAlign:'right' }} />
                       </div>
