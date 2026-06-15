@@ -81,11 +81,12 @@ RULE 5 — WATER FIXTURES (count exactly as shown in floor plan):
 - fix_ice_maker: Every ice maker or fridge water line rough-in
 - fix_pot_filler: Every pot filler symbol
 - fix_kitchen_patio: Outdoor kitchen water connection / patio kitchen sink
+- fix_hose_bib: Exterior hose bib / sillcock (HB symbol on exterior walls or laundry area) — count each one shown
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 6 — ADD-ONS (set service_id to null):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Dishwashers, garbage disposals, water softeners, hose bibs, irrigation, and anything else not in the approved lists above → service_id: null. They become add-ons.
+Dishwashers, garbage disposals, water softeners, irrigation, and anything else not in the approved lists above → service_id: null. They become add-ons. (Hose bibs are now mapped to fix_hose_bib — do NOT send them as add-ons.)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 7 — MULTI-UNIT:

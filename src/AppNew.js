@@ -49,6 +49,7 @@ const SERVICES = [
   { id: 'fix_pot_filler',      name: 'Pot Filler',                     unit: 0 },
   { id: 'fix_laundry',         name: 'Laundry Room / Washer',          unit: 0 },
   { id: 'fix_kitchen_patio',   name: 'Kitchen Patio (Outdoor Water)',   unit: 0 },
+  { id: 'fix_hose_bib',        name: 'Hose Bib',                        unit: 0 },
   // Gas Fixtures
   { id: 'fix_gas_furnace',     name: 'Gas Furnace',                    unit: 0 },
   { id: 'fix_gas_wh',          name: 'Gas Water Heater',               unit: 0 },
@@ -64,11 +65,11 @@ const SERVICE_GROUPS = [
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
-  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio'] },
+  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib'] },
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'fix_hose_bib']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -1505,7 +1506,10 @@ export default function AppNew(){
     }
   }
 
-  const WATER_FIX_IDS = new Set(SERVICE_GROUPS.find(g => g.label === 'Water Fixtures')?.ids || [])
+  const WATER_FIX_IDS = new Set(
+    (SERVICE_GROUPS.find(g => g.label === 'Water Fixtures')?.ids || [])
+      .filter(id => !BASE_SERVICE_IDS.includes(id))
+  )
 
   function setAllWaterFixtureUnit(val) {
     setWaterFixtureUnitPrice(val)
