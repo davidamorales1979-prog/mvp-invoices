@@ -34,7 +34,7 @@ const SERVICES = [
   { id: 'recirc_pump',     name: 'Recirculation Pump System',     unit: 0 },
   { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
   { id: 'manablok',        name: 'Manablok System',               unit: 950 },
-  { id: 'repiping',        name: 'Repiping',                      unit: 1500 },
+  { id: 'repiping',        name: 'Repiping',                      unit: 1500, startUnit: 0, finishUnit: 0 },
   { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
   // Water Fixtures
   { id: 'fix_toilet',          name: 'Toilet',                         unit: 0 },
@@ -69,7 +69,7 @@ const SERVICE_GROUPS = [
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -254,11 +254,18 @@ export default function AppNew(){
     if (!it.enabled) return sum
     if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return sum
     if (it.id === 'wh_replacement') return sum + (it.garageQty||0)*(it.garageUnit||0) + (it.atticQty||0)*(it.atticUnit||0)
+    if (it.id === 'repiping' && it.billingMode === 'ind') return sum + (it.startUnit||0) + (it.finishUnit||0)
     return sum + (it.qty||0)*(it.unit||0)
   }, 0), [services, isNewConstruction])
   const printServices = services.flatMap(s => {
     if (!s.enabled) return []
     if (isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct') return []
+    if (s.id === 'repiping' && s.billingMode === 'ind') {
+      const rows = []
+      if ((s.startUnit||0) > 0) rows.push({ ...s, name: 'Repiping — Start Payment', qty: 1, unit: s.startUnit||0 })
+      if ((s.finishUnit||0) > 0) rows.push({ ...s, name: 'Repiping — Completion Payment', qty: 1, unit: s.finishUnit||0 })
+      return rows
+    }
     if (s.id === 'wh_replacement') {
       const rows = []
       if ((s.garageQty||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Garage', qty: s.garageQty||0, unit: s.garageUnit||0 })
@@ -2218,6 +2225,39 @@ export default function AppNew(){
                     )}
                   </div>
                   {entries.map(({ s, i }) => {
+                    // Repiping — Independent mode: Start + Completion payment sub-rows
+                    if (s.id === 'repiping' && s.billingMode === 'ind') {
+                      const repTotal = s.enabled ? (s.startUnit||0) + (s.finishUnit||0) : 0
+                      return (
+                        <div key={s.id} className='no-print' style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                            <input type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                            <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                              <span>{s.name}</span>
+                              {isNewConstruction && (
+                                <div className='no-print' style={{ display:'flex', gap:2 }}>
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:'#1a3450', color:'#9fb0c6', cursor:'pointer' }}>% Based</button>
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:GOLD, color:NAVY, cursor:'pointer' }}>Independent</button>
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(repTotal)}</div>
+                          </div>
+                          {s.enabled && (
+                            <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                              {[['Start', 'startUnit'], ['Completion', 'finishUnit']].map(([label, key]) => (
+                                <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                  <span style={{ color:'#9fb0c6', fontSize:12, width:80, flexShrink:0 }}>{label}</span>
+                                  <input type='text' value={formatMoneyInput(s[key]||0)} onChange={e=>updateService(i,key,parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                  <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency(s[key]||0)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
                     // Water Heater Replacement — Garage + Attic sub-rows
                     if (s.id === 'wh_replacement') {
                       const whTotal = s.enabled ? (s.garageQty||0)*(s.garageUnit||0)+(s.atticQty||0)*(s.atticUnit||0) : 0
@@ -3885,7 +3925,8 @@ function HelpPanel({ onClose }) {
         'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture.',
         'GAS FIXTURES — dual billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a single price for all gas fixtures. In % Based mode, total gas fixture amount (qty × price) is added to the base and splits across your phase schedule. Switch any individual fixture to Independent to bill it separately outside the phase split.',
         'HOSE BIB — dual billing: Works the same as Gas Fixtures. Toggle % Based to include it in the base total, or Independent to bill it as a separate line item.',
-        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, Repiping, and Cut & Bust.',
+        'REPIPING — dual billing: In % Based mode, the repiping amount (qty × price) rolls into the base and splits across your phase schedule. In Independent mode, two separate payment fields appear — "Start" (collected when work begins) and "Completion" (collected when finished). Both show as individual line items in the total and neither enters the phase calculation.',
+        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, and Cut & Bust.',
         'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
         'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
         'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
