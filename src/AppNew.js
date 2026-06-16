@@ -29,9 +29,9 @@ const SERVICES = [
   { id: 'gas_underground', name: 'Underground Gas Line',       unit: 0 },
   { id: 'gas_indoor',   name: 'Gas System Indoor',             unit: 300 },
   // Others
-  { id: 'water_heater',    name: 'Water Heater',                  unit: 600 },
-  { id: 'tankless_wh',     name: 'Tankless Water Heater',         unit: 0 },
-  { id: 'recirc_pump',     name: 'Recirculation Pump System',     unit: 0 },
+  { id: 'water_heater',    name: 'Water Heater',                  unit: 600, startUnit: 0, finishUnit: 0 },
+  { id: 'tankless_wh',     name: 'Tankless Water Heater',         unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'recirc_pump',     name: 'Recirculation Pump System',     unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'manablok',        name: 'Manablok System',               unit: 950 },
   { id: 'repiping',        name: 'Repiping',                      unit: 1500, startUnit: 0, finishUnit: 0 },
@@ -254,28 +254,24 @@ export default function AppNew(){
     if (!it.enabled) return sum
     if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return sum
     if (it.id === 'wh_replacement') return sum + (it.garageQty||0)*(it.garageUnit||0) + (it.atticQty||0)*(it.atticUnit||0)
+    if (it.billingMode === 'ind_2pay') return sum + (it.startUnit||0) + (it.finishUnit||0)
     if (it.id === 'repiping' && it.billingMode === 'ind') return sum + (it.startUnit||0) + (it.finishUnit||0)
-    if (it.id === 'wh_replacement' && it.billingMode === 'ind_2pay') return sum + (it.startUnit||0) + (it.finishUnit||0)
     return sum + (it.qty||0)*(it.unit||0)
   }, 0), [services, isNewConstruction])
   const printServices = services.flatMap(s => {
     if (!s.enabled) return []
     if (isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct') return []
+    if (s.billingMode === 'ind_2pay') {
+      const rows = []
+      if ((s.startUnit||0) > 0) rows.push({ ...s, name: `${s.name} — Start Payment`, qty: 1, unit: s.startUnit||0 })
+      if ((s.finishUnit||0) > 0) rows.push({ ...s, name: `${s.name} — Completion Payment`, qty: 1, unit: s.finishUnit||0 })
+      return rows
+    }
     if (s.id === 'repiping' && s.billingMode === 'ind') {
       const rows = []
       if ((s.startUnit||0) > 0) rows.push({ ...s, name: 'Repiping — Start Payment', qty: 1, unit: s.startUnit||0 })
       if ((s.finishUnit||0) > 0) rows.push({ ...s, name: 'Repiping — Completion Payment', qty: 1, unit: s.finishUnit||0 })
       return rows
-    }
-    if (s.id === 'wh_replacement') {
-      if (s.billingMode === 'ind_2pay') {
-        const rows = []
-        if ((s.startUnit||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Start Payment', qty: 1, unit: s.startUnit||0 })
-        if ((s.finishUnit||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Completion Payment', qty: 1, unit: s.finishUnit||0 })
-        return rows
-      }
-      if (!(s.qty||0)) return []
-      return [{ ...s }]
     }
     if (!(s.qty||0)) return []
     const name = (s.id === 'water_tap' || s.id === 'sewer_tap') && s.desc
@@ -2309,6 +2305,53 @@ export default function AppNew(){
                       )
                     }
 
+                    // Water Heater / Tankless WH / Recirc Pump — 3 billing modes
+                    if (s.id === 'water_heater' || s.id === 'tankless_wh' || s.id === 'recirc_pump') {
+                      const sMode = s.billingMode ?? 'pct'
+                      const sTotal = s.enabled
+                        ? sMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) : (s.qty||0)*(s.unit||0)
+                        : 0
+                      const printVisible = s.enabled && (sMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) > 0 : (s.qty||0) > 0)
+                      return (
+                        <div key={s.id} className={!printVisible ? 'no-print' : undefined} style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
+                          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                            <input className='no-print' type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
+                            <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                              <span>{s.name}</span>
+                              {isNewConstruction && (
+                                <div className='no-print' style={{ display:'flex', gap:2 }}>
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:sMode==='pct' ? GOLD : '#1a3450', color:sMode==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:sMode==='ind' ? GOLD : '#1a3450', color:sMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Fixed</button>
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','ind_2pay')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:sMode==='ind_2pay' ? GOLD : '#1a3450', color:sMode==='ind_2pay' ? NAVY : '#9fb0c6', cursor:'pointer' }}>2-Payment</button>
+                                </div>
+                              )}
+                              {isNewConstruction && sMode === 'pct' && <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>}
+                            </div>
+                            <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(sTotal)}</div>
+                          </div>
+                          {s.enabled && (
+                            <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
+                              {sMode !== 'ind_2pay' ? (
+                                <div className='no-print' style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                  <input type='number' value={s.qty||0} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
+                                  <input type='text' value={formatMoneyInput(s.unit||0)} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                  <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s.qty||0)*(s.unit||0))}</div>
+                                </div>
+                              ) : (
+                                [['Start','startUnit'],['Completion','finishUnit']].map(([label,key])=>(
+                                  <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                    <span style={{ color:'#9fb0c6', fontSize:12, width:80, flexShrink:0 }}>{label}</span>
+                                    <input type='text' value={formatMoneyInput(s[key]||0)} onChange={e=>updateService(i,key,parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                    <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency(s[key]||0)}</div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
                     // Standard row (with optional desc field for water_tap / sewer_tap)
                     const isTap   = s.id === 'water_tap' || s.id === 'sewer_tap'
                     const isStorm = s.id === 'storm'
@@ -3946,7 +3989,8 @@ function HelpPanel({ onClose }) {
         'Services are organized into six groups: Sewer, Water, Gas, Others, Water Fixtures, and Gas Fixtures.',
         '% Based: the service amount is added into the base total and split across your phase schedule (e.g. 30% Underground / 50% Rough-In / 20% Trim). It shows as "in base" on the invoice.',
         'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
-        'Services with the % Based / Independent toggle (New Construction only): Water Line Meter, Water Heater, Tankless WH, Recirculation Pump, Manablok, Gas System Indoor, Hose Bib, and ALL Gas Fixtures (Gas Furnace, Gas Water Heater, Gas Dryer, Gas Stove, Gas Patio BBQ/Grill, Gas Line Generator, Gas Kitchen Patio).',
+        'Services with billing mode toggles (New Construction only): Water Line Meter, Manablok, Gas System Indoor, Hose Bib, and ALL Gas Fixtures have a 2-mode toggle (% Based / Independent). Water Heater, Tankless WH, Recirculation Pump, Water Heater Replacement, and Repiping have a 3-mode toggle (% Based / Fixed / 2-Payment).',
+        'THREE-MODE SERVICES — Water Heater, Tankless WH, Recirculation Pump, Water Heater Replacement: (1) % Based — qty × unit enters the base and splits across the phase schedule, shows "(in base)". (2) Fixed — qty × unit billed as an independent line item outside the phase split. (3) 2-Payment — separate "Start" and "Completion" flat dollar fields; both appear as individual line items on the PDF, neither enters the phase calculation.',
         'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture.',
         'GAS FIXTURES — dual billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a single price for all gas fixtures. In % Based mode, total gas fixture amount (qty × price) is added to the base and splits across your phase schedule. Switch any individual fixture to Independent to bill it separately outside the phase split.',
         'HOSE BIB — dual billing: Works the same as Gas Fixtures. Toggle % Based to include it in the base total, or Independent to bill it as a separate line item.',
