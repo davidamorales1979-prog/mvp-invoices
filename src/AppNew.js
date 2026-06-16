@@ -32,7 +32,7 @@ const SERVICES = [
   { id: 'water_heater',    name: 'Water Heater',                  unit: 600 },
   { id: 'tankless_wh',     name: 'Tankless Water Heater',         unit: 0 },
   { id: 'recirc_pump',     name: 'Recirculation Pump System',     unit: 0 },
-  { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, garageQty: 0, garageUnit: 0, atticQty: 0, atticUnit: 0 },
+  { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'manablok',        name: 'Manablok System',               unit: 950 },
   { id: 'repiping',        name: 'Repiping',                      unit: 1500, startUnit: 0, finishUnit: 0 },
   { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
@@ -69,7 +69,7 @@ const SERVICE_GROUPS = [
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -255,6 +255,7 @@ export default function AppNew(){
     if (isNewConstruction && BASE_SERVICE_IDS.includes(it.id) && (it.billingMode ?? 'pct') === 'pct') return sum
     if (it.id === 'wh_replacement') return sum + (it.garageQty||0)*(it.garageUnit||0) + (it.atticQty||0)*(it.atticUnit||0)
     if (it.id === 'repiping' && it.billingMode === 'ind') return sum + (it.startUnit||0) + (it.finishUnit||0)
+    if (it.id === 'wh_replacement' && it.billingMode === 'ind_2pay') return sum + (it.startUnit||0) + (it.finishUnit||0)
     return sum + (it.qty||0)*(it.unit||0)
   }, 0), [services, isNewConstruction])
   const printServices = services.flatMap(s => {
@@ -267,10 +268,14 @@ export default function AppNew(){
       return rows
     }
     if (s.id === 'wh_replacement') {
-      const rows = []
-      if ((s.garageQty||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Garage', qty: s.garageQty||0, unit: s.garageUnit||0 })
-      if ((s.atticQty||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Attic', qty: s.atticQty||0, unit: s.atticUnit||0 })
-      return rows
+      if (s.billingMode === 'ind_2pay') {
+        const rows = []
+        if ((s.startUnit||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Start Payment', qty: 1, unit: s.startUnit||0 })
+        if ((s.finishUnit||0) > 0) rows.push({ ...s, name: 'Water Heater Replacement — Completion Payment', qty: 1, unit: s.finishUnit||0 })
+        return rows
+      }
+      if (!(s.qty||0)) return []
+      return [{ ...s }]
     }
     if (!(s.qty||0)) return []
     const name = (s.id === 'water_tap' || s.id === 'sewer_tap') && s.desc
@@ -2258,26 +2263,46 @@ export default function AppNew(){
                       )
                     }
 
-                    // Water Heater Replacement — Garage + Attic sub-rows
+                    // Water Heater Replacement — 3 billing modes
                     if (s.id === 'wh_replacement') {
-                      const whTotal = s.enabled ? (s.garageQty||0)*(s.garageUnit||0)+(s.atticQty||0)*(s.atticUnit||0) : 0
+                      const whMode = s.billingMode ?? 'pct'
+                      const whTotal = s.enabled
+                        ? whMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) : (s.qty||0)*(s.unit||0)
+                        : 0
                       return (
                         <div key={s.id} className='no-print' style={{ padding:'6px 0', borderBottom:'1px solid rgba(255,255,255,0.02)' }}>
                           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                             <input type='checkbox' checked={s.enabled} onChange={e=>toggleService(i, e.target.checked)} />
-                            <span style={{ flex:1 }}>{s.name}</span>
+                            <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                              <span>{s.name}</span>
+                              <div className='no-print' style={{ display:'flex', gap:2 }}>
+                                {isNewConstruction && (
+                                  <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:whMode==='pct' ? GOLD : '#1a3450', color:whMode==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                                )}
+                                <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:whMode==='ind' ? GOLD : '#1a3450', color:whMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Fixed</button>
+                                <button type='button' onClick={()=>updateService(i,'billingMode','ind_2pay')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:whMode==='ind_2pay' ? GOLD : '#1a3450', color:whMode==='ind_2pay' ? NAVY : '#9fb0c6', cursor:'pointer' }}>2-Payment</button>
+                              </div>
+                              {isNewConstruction && whMode === 'pct' && <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>}
+                            </div>
                             <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(whTotal)}</div>
                           </div>
                           {s.enabled && (
                             <div style={{ paddingLeft:24, marginTop:6, display:'flex', flexDirection:'column', gap:6 }}>
-                              {[['Garage','garageQty','garageUnit'],['Attic','atticQty','atticUnit']].map(([label,qKey,uKey])=>(
-                                <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
-                                  <span style={{ color:'#9fb0c6', fontSize:12, width:52, flexShrink:0 }}>{label}</span>
-                                  <input type='number' value={s[qKey]||0} onChange={e=>updateService(i,qKey,Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
-                                  <input type='text' value={formatMoneyInput(s[uKey]||0)} onChange={e=>updateService(i,uKey,parseMoneyInput(e.target.value))} style={{ width:100 }} placeholder='Price/unit' />
-                                  <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s[qKey]||0)*(s[uKey]||0))}</div>
+                              {whMode !== 'ind_2pay' ? (
+                                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                  <input type='number' value={s.qty||0} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
+                                  <input type='text' value={formatMoneyInput(s.unit||0)} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                  <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s.qty||0)*(s.unit||0))}</div>
                                 </div>
-                              ))}
+                              ) : (
+                                [['Start','startUnit'],['Completion','finishUnit']].map(([label,key])=>(
+                                  <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
+                                    <span style={{ color:'#9fb0c6', fontSize:12, width:80, flexShrink:0 }}>{label}</span>
+                                    <input type='text' value={formatMoneyInput(s[key]||0)} onChange={e=>updateService(i,key,parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                    <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency(s[key]||0)}</div>
+                                  </div>
+                                ))
+                              )}
                             </div>
                           )}
                         </div>
@@ -3926,7 +3951,8 @@ function HelpPanel({ onClose }) {
         'GAS FIXTURES — dual billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a single price for all gas fixtures. In % Based mode, total gas fixture amount (qty × price) is added to the base and splits across your phase schedule. Switch any individual fixture to Independent to bill it separately outside the phase split.',
         'HOSE BIB — dual billing: Works the same as Gas Fixtures. Toggle % Based to include it in the base total, or Independent to bill it as a separate line item.',
         'REPIPING — dual billing: In % Based mode, the repiping amount (qty × price) rolls into the base and splits across your phase schedule. In Independent mode, two separate payment fields appear — "Start" (collected when work begins) and "Completion" (collected when finished). Both show as individual line items in the total and neither enters the phase calculation.',
-        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Water Heater Replacement, and Cut & Bust.',
+        'WATER HEATER REPLACEMENT — three billing modes: (1) % Based (New Construction) — qty × unit price enters the base and splits across the phase schedule. (2) Fixed — single flat price billed as an independent line item. (3) 2-Payment — "Start" amount collected when work begins and "Completion" amount collected when finished, both appear as separate line items; neither enters the phase calculation.',
+        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, and Cut & Bust.',
         'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
         'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
         'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
