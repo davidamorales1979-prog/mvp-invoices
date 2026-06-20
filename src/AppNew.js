@@ -4185,6 +4185,21 @@ function HelpPanel({ onClose }) {
         'To remove a team member: click Remove next to their name in Settings → Team. Their account becomes a standalone FieldQuote account with its own trial period.',
       ]
     },
+    {
+      title: 'Install FieldQuote on Your Phone',
+      icon: '📱',
+      desc: 'Add FieldQuote to your home screen for a real app icon and full-screen experience — no App Store or Google Play needed.',
+      tip: 'Once installed, FieldQuote launches full-screen just like a native app. It works on both iPhone and Android.',
+      steps: [
+        <><span style={STEP_HEAD}>iPhone (Safari)</span>{' '}Open fieldquotehq.com in Safari. Tap the Share button (the square with an arrow pointing up, at the bottom of the screen). Scroll down in the share sheet and tap "Add to Home Screen". Keep the name "FieldQuote" and tap Add in the top-right corner.</>,
+        <><span style={STEP_HEAD}>Android (Chrome)</span>{' '}Open fieldquotehq.com in Chrome. Tap the 3-dot menu in the top-right corner. Tap "Add to Home Screen" or "Install App". Tap Install to confirm. A FieldQuote icon appears on your home screen immediately.</>,
+        'Once installed, tap the FieldQuote icon on your home screen to launch the app in full-screen mode — no browser address bar, no distractions. It looks and feels like a native app.',
+        'No App Store or Google Play required. The app installs directly from the website in seconds.',
+        'The installed app always runs the latest version automatically — no manual updates needed.',
+        'iPhone only: you must use Safari specifically. The Add to Home Screen option is not available in Chrome or Firefox on iOS.',
+        'Android: Chrome, Samsung Internet, and most Android browsers support installation.',
+      ]
+    },
   ]
 
   const WHATS_NEW = [
