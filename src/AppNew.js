@@ -77,7 +77,7 @@ function mergeServices(saved) {
     ...s,
     enabled: false,
     qty: 0,
-    ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: 'pct' } : {}),
+    ...(BASE_SERVICE_IDS.includes(s.id) ? { billingMode: null } : {}),
     ...(map.get(s.id) || {}),
   }))
 }
@@ -90,7 +90,7 @@ function calcDocBase(doc) {
   const svcAmt = (doc.services || []).reduce((sum, s) => {
     if (doc.project_type !== 'New Construction') return sum
     if (!BASE_SERVICE_IDS.includes(s.id)) return sum
-    if ((s.billingMode ?? 'pct') !== 'pct') return sum
+    if (s.billingMode !== 'pct') return sum
     return sum + (s.enabled ? (s.qty || 0) * (s.unit || 0) : 0)
   }, 0)
   return (doc.houses || 0) * (doc.fixtures_per_house || 0) * (doc.price_per_fixture || 0) + svcAmt
@@ -221,7 +221,7 @@ export default function AppNew(){
   const baseServiceAmount = services.reduce((sum,s) => {
     if (!isNewConstruction) return sum
     if (!BASE_SERVICE_IDS.includes(s.id)) return sum
-    if ((s.billingMode ?? 'pct') !== 'pct') return sum
+    if (s.billingMode !== 'pct') return sum
     return sum + ((s.enabled ? (s.qty||0) : 0) * (s.unit||0))
   }, 0)
   const base = houses * fixturesPerHouse * pricePerFixture + baseServiceAmount
@@ -2221,7 +2221,7 @@ export default function AppNew(){
                   {entries.map(({ s, i }) => {
                     // Water Heater Replacement — 3 billing modes
                     if (s.id === 'wh_replacement') {
-                      const whMode = s.billingMode ?? 'pct'
+                      const whMode = s.billingMode
                       const whTotal = s.enabled
                         ? whMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) : (s.qty||0)*(s.unit||0)
                         : 0
@@ -2267,7 +2267,7 @@ export default function AppNew(){
 
                     // Water Heater / Tankless WH / Recirc Pump / Repiping — 3 billing modes
                     if (s.id === 'water_heater' || s.id === 'tankless_wh' || s.id === 'recirc_pump' || s.id === 'repiping') {
-                      const sMode = s.billingMode ?? 'pct'
+                      const sMode = s.billingMode
                       const sTotal = s.enabled
                         ? sMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) : (s.qty||0)*(s.unit||0)
                         : 0
@@ -2330,11 +2330,11 @@ export default function AppNew(){
                             ) : null}
                             {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) ? (
                               <div className='no-print' style={{ display:'flex', gap:2 }}>
-                                <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:(s.billingMode ?? 'pct')==='pct' ? GOLD : '#1a3450', color:(s.billingMode ?? 'pct')==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
+                                <button type='button' onClick={()=>updateService(i,'billingMode','pct')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='pct' ? GOLD : '#1a3450', color:s.billingMode==='pct' ? NAVY : '#9fb0c6', cursor:'pointer' }}>% Based</button>
                                 <button type='button' onClick={()=>updateService(i,'billingMode','ind')} style={{ padding:'2px 8px', fontSize:11, borderRadius:4, border:'none', background:s.billingMode==='ind' ? GOLD : '#1a3450', color:s.billingMode==='ind' ? NAVY : '#9fb0c6', cursor:'pointer' }}>Independent</button>
                               </div>
                             ) : null}
-                            {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && (s.billingMode ?? 'pct') === 'pct' ? (
+                            {isNewConstruction && BASE_SERVICE_IDS.includes(s.id) && s.billingMode === 'pct' ? (
                               <span style={{ color:'#7f98b0', fontSize:11 }}>(in base)</span>
                             ) : null}
                           </div>
@@ -2594,7 +2594,7 @@ export default function AppNew(){
                       <td>{houses} {getUnitLabel(fixtureType).toLowerCase().replace(/s$/, '(s)')} × {fixturesPerHouse} fixture(s) × {formatCurrency(pricePerFixture)}</td>
                       <td colSpan={2} style={{ textAlign:'right' }}>{formatCurrency(houses * fixturesPerHouse * pricePerFixture)}</td>
                     </tr>
-                    {isNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0 && (s.billingMode ?? 'pct') === 'pct').map(s => (
+                    {isNewConstruction && services.filter(s=>BASE_SERVICE_IDS.includes(s.id) && s.enabled && s.qty>0 && s.billingMode === 'pct').map(s => (
                       <tr key={s.id}>
                         <td style={{ color:'#7f98b0' }}>{s.name}</td>
                         <td colSpan={2} style={{ textAlign:'right', color:'#7f98b0' }}>{formatCurrency((s.qty||0)*s.unit)}</td>
