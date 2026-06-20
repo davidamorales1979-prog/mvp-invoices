@@ -125,6 +125,10 @@ export default function AppNew(){
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
+  const [showForgotPw, setShowForgotPw] = useState(false)
+  const [forgotPwEmail, setForgotPwEmail] = useState('')
+  const [forgotPwMsg, setForgotPwMsg] = useState('')
+  const [forgotPwLoading, setForgotPwLoading] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [profile, setProfile] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -473,6 +477,18 @@ export default function AppNew(){
       return
     }
     setAuthMessage('Signup successful — check your email to confirm or sign in.')
+  }
+
+  async function sendPasswordReset() {
+    setForgotPwMsg('')
+    if (!forgotPwEmail.trim()) { setForgotPwMsg('Enter your email address.'); return }
+    setForgotPwLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotPwEmail.trim(), {
+      redirectTo: window.location.origin,
+    })
+    setForgotPwLoading(false)
+    if (error) { setForgotPwMsg(error.message); return }
+    setForgotPwMsg('Check your email for a password reset link.')
   }
 
   async function signIn(){
@@ -1597,30 +1613,51 @@ export default function AppNew(){
           <div style={{ textAlign:'center', marginBottom:20 }}>
             <img src='/logo.svg' alt='FieldQuote' style={{ height:90, width:'auto' }} />
           </div>
-          <h2 style={{ color:GOLD, marginBottom:12, textAlign:'center' }}>Login or Sign Up</h2>
-          <div style={{ marginBottom:12 }}>
-            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Email</label>
-            <input type='email' value={email} onChange={e=>setEmail(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
-          </div>
-          <div style={{ marginBottom:16 }}>
-            <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Password</label>
-            <input type='password' value={password} onChange={e=>setPassword(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
-          </div>
-          <div style={{ marginBottom:14, display:'flex', alignItems:'flex-start', gap:10 }}>
-            <input type='checkbox' id='agreeTerms' checked={agreedToTerms} onChange={e=>setAgreedToTerms(e.target.checked)} style={{ marginTop:3, accentColor:GOLD, flexShrink:0, width:15, height:15, cursor:'pointer' }} />
-            <label htmlFor='agreeTerms' style={{ color:'#9fb0c6', fontSize:12, lineHeight:1.5, cursor:'pointer' }}>
-              I agree to the{' '}
-              <a href='/terms' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Terms of Service</a>
-              {' '}and{' '}
-              <a href='/privacy' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Privacy Policy</a>
-              {' '}(required for Sign Up)
-            </label>
-          </div>
-          {authMessage ? <div style={{ color:GOLD, marginBottom:12, fontSize:13 }}>{authMessage}</div> : null}
-          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-            <button onClick={signIn} style={{ flex:1, padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none' }}>Sign In</button>
-            <button onClick={signUp} style={{ flex:1, padding:10, borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, opacity: agreedToTerms ? 1 : 0.55 }}>Sign Up</button>
-          </div>
+          {showForgotPw ? (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:8, textAlign:'center' }}>Reset Password</h2>
+              <p style={{ color:'#9fb0c6', fontSize:13, marginBottom:16, textAlign:'center' }}>Enter your email and we'll send a reset link.</p>
+              <div style={{ marginBottom:12 }}>
+                <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Email</label>
+                <input type='email' value={forgotPwEmail} onChange={e=>setForgotPwEmail(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223', boxSizing:'border-box' }} />
+              </div>
+              {forgotPwMsg ? <div style={{ color: forgotPwMsg.startsWith('Check') ? '#4caf50' : GOLD, marginBottom:12, fontSize:13 }}>{forgotPwMsg}</div> : null}
+              <button onClick={sendPasswordReset} disabled={forgotPwLoading} style={{ width:'100%', padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none', fontWeight:700, cursor:'pointer', marginBottom:10 }}>
+                {forgotPwLoading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+              <button type='button' onClick={() => { setShowForgotPw(false); setForgotPwMsg('') }} style={{ width:'100%', padding:8, borderRadius:6, background:'transparent', color:'#9fb0c6', border:'1px solid #334', cursor:'pointer', fontSize:13 }}>← Back to Sign In</button>
+            </>
+          ) : (
+            <>
+              <h2 style={{ color:GOLD, marginBottom:12, textAlign:'center' }}>Login or Sign Up</h2>
+              <div style={{ marginBottom:12 }}>
+                <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Email</label>
+                <input type='email' value={email} onChange={e=>setEmail(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
+              </div>
+              <div style={{ marginBottom:6 }}>
+                <label style={{ display:'block', marginBottom:6, color:'#9fb0c6' }}>Password</label>
+                <input type='password' value={password} onChange={e=>setPassword(e.target.value)} style={{ width:'100%', padding:10, borderRadius:6, border:'1px solid #223' }} />
+              </div>
+              <div style={{ textAlign:'right', marginBottom:14 }}>
+                <button type='button' onClick={() => { setShowForgotPw(true); setForgotPwEmail(email); setForgotPwMsg('') }} style={{ background:'none', border:'none', color:GOLD, fontSize:12, cursor:'pointer', padding:0 }}>Forgot Password?</button>
+              </div>
+              <div style={{ marginBottom:14, display:'flex', alignItems:'flex-start', gap:10 }}>
+                <input type='checkbox' id='agreeTerms' checked={agreedToTerms} onChange={e=>setAgreedToTerms(e.target.checked)} style={{ marginTop:3, accentColor:GOLD, flexShrink:0, width:15, height:15, cursor:'pointer' }} />
+                <label htmlFor='agreeTerms' style={{ color:'#9fb0c6', fontSize:12, lineHeight:1.5, cursor:'pointer' }}>
+                  I agree to the{' '}
+                  <a href='/terms' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Terms of Service</a>
+                  {' '}and{' '}
+                  <a href='/privacy' target='_blank' rel='noopener noreferrer' style={{ color:GOLD, textDecoration:'none' }}>Privacy Policy</a>
+                  {' '}(required for Sign Up)
+                </label>
+              </div>
+              {authMessage ? <div style={{ color:GOLD, marginBottom:12, fontSize:13 }}>{authMessage}</div> : null}
+              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                <button onClick={signIn} style={{ flex:1, padding:10, borderRadius:6, background:GOLD, color:NAVY, border:'none' }}>Sign In</button>
+                <button onClick={signUp} style={{ flex:1, padding:10, borderRadius:6, background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, opacity: agreedToTerms ? 1 : 0.55 }}>Sign Up</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     )
