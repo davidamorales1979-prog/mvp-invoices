@@ -4271,6 +4271,10 @@ function HelpPanel({ onClose }) {
             <div style={{ marginTop:6, paddingLeft:30, fontSize:11, color:'#7f98b0' }}>Also works with Samsung Internet and most other Android browsers.</div>
           </div>
 
+          <div style={{ background:'#071827', border:'1px solid #2a3f52', borderRadius:6, padding:'10px 14px', fontSize:12, color:'#7f98b0', lineHeight:1.7, marginBottom:10 }}>
+            <strong style={{ color:'#9fb0c6' }}>🔄 Already installed and see a generic icon?</strong> Delete the old icon from your home screen first (press and hold the icon → <em>Remove App</em>), then repeat the install steps above. This refreshes the icon to the correct FieldQuote logo.
+          </div>
+
           <div style={{ background:'#041020', border:`1px solid ${GOLD}55`, borderRadius:6, padding:'10px 14px', fontSize:12, color:'#c8d8e8', lineHeight:1.7 }}>
             ✅ <strong style={{ color:GOLD }}>After install:</strong> Tap the FieldQuote icon on your home screen to launch full-screen — no browser bar, no distractions. Works for the account owner <em>and</em> every team member. The app always updates automatically — no downloads or app store visits needed.
           </div>
