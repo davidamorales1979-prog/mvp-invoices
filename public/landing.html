@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FieldQuote — Plumbing Quotes &amp; Invoices, Built for the Field</title>
+  <meta name="description" content="Create professional plumbing quotes and invoices from your phone in minutes. AI blueprint analysis, flexible billing, digital signatures. 30-day free trial." />
+  <meta property="og:title" content="FieldQuote — Quote Jobs Faster, Get Paid Sooner" />
+  <meta property="og:description" content="Built by a licensed plumber in Texas. Try free for 30 days — no credit card needed." />
+  <meta property="og:image" content="/logo512.png" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/logo192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Variables ── */
+    :root {
+      --navy:        #0a1628;
+      --navy-2:      #0f2240;
+      --navy-card:   #071827;
+      --navy-deep:   #060f1c;
+      --border:      #1e3a55;
+      --gold:        #c9a227;
+      --gold-lt:     #e8c44a;
+      --gold-dim:    rgba(201,162,39,0.14);
+      --gold-glow:   rgba(201,162,39,0.08);
+      --text:        #dce8f2;
+      --text-muted:  #8fa5bc;
+      --text-dim:    #4a6a85;
+      --green:       #3dba6e;
+      --r:           12px;
+      --r-lg:        20px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+
+    /* ── Bilingual (JS-driven, no CSS needed by default) ── */
+
+    /* ── Layout ── */
+    .wrap {
+      width: 100%; max-width: 1080px;
+      margin: 0 auto; padding: 0 20px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 11px 22px; border-radius: 9px;
+      font-size: 14px; font-weight: 700; font-family: inherit;
+      cursor: pointer; transition: all 0.18s; border: none;
+      text-decoration: none; white-space: nowrap;
+    }
+    .btn-gold  { background: var(--gold); color: var(--navy); }
+    .btn-gold:hover  { background: var(--gold-lt); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,162,39,0.3); }
+    .btn-ghost { background: transparent; color: var(--gold); border: 1.5px solid var(--gold); }
+    .btn-ghost:hover { background: var(--gold-dim); }
+    .btn-lg { padding: 15px 32px; font-size: 16px; border-radius: 11px; }
+    .btn-xl { padding: 18px 44px; font-size: 18px; border-radius: 13px; }
+
+    /* ── Header ── */
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10,22,40,0.94);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(201,162,39,0.12);
+    }
+    .header-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 20px; max-width: 1080px; margin: 0 auto;
+    }
+    .logo { display: flex; align-items: center; gap: 9px; }
+    .logo img { height: 34px; width: auto; }
+    .logo-text { font-size: 17px; font-weight: 900; color: var(--gold); letter-spacing: -0.2px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    .lang-pill {
+      display: flex; border-radius: 20px; overflow: hidden;
+      border: 1px solid var(--border); background: var(--navy-card);
+    }
+    .lang-btn {
+      padding: 5px 13px; font-size: 12px; font-weight: 700;
+      color: var(--text-muted); cursor: pointer;
+      background: none; border: none; font-family: inherit; transition: all 0.15s;
+    }
+    .lang-btn.active { background: var(--gold); color: var(--navy); }
+
+    /* ── Hero ── */
+    .hero {
+      padding: 64px 20px 56px;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; top: -180px; left: 50%; transform: translateX(-50%);
+      width: 900px; height: 600px;
+      background: radial-gradient(ellipse at center, var(--gold-glow) 0%, transparent 68%);
+      pointer-events: none;
+    }
+    .hero-layout {
+      display: flex; flex-direction: column; align-items: center; gap: 48px;
+    }
+    .hero-text { text-align: center; max-width: 600px; }
+    .eyebrow {
+      display: inline-block;
+      font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+      color: var(--gold);
+      background: var(--gold-dim); border: 1px solid rgba(201,162,39,0.28);
+      padding: 5px 14px; border-radius: 20px; margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 8vw, 66px); font-weight: 900; line-height: 1.05;
+      letter-spacing: -2px; color: #fff; margin-bottom: 18px;
+    }
+    .hero h1 em { font-style: normal; color: var(--gold); }
+    .hero-sub {
+      font-size: clamp(15px, 2.8vw, 18px); color: var(--text-muted);
+      line-height: 1.7; margin-bottom: 30px;
+    }
+    .hero-ctas { display: flex; flex-wrap: wrap; gap: 11px; justify-content: center; }
+    .hero-fine { font-size: 12px; color: var(--text-dim); margin-top: 11px; }
+
+    /* ── Phone mockup ── */
+    .phone-outer {
+      display: flex; align-items: center; justify-content: center; gap: 16px;
+      flex-shrink: 0;
+    }
+    .phone {
+      width: 250px; flex-shrink: 0;
+      background: #111f30;
+      border-radius: 42px; border: 3px solid #1a324d;
+      box-shadow:
+        0 0 0 7px #070f1c,
+        0 40px 100px rgba(0,0,0,0.65),
+        0 0 60px var(--gold-glow);
+      animation: float 5s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+    .phone-notch {
+      width: 72px; height: 6px; border-radius: 3px;
+      background: #1a324d; margin: 16px auto 0;
+    }
+    .p-screen {
+      margin: 10px 8px 14px; background: var(--navy); border-radius: 28px;
+      overflow: hidden; padding-bottom: 10px;
+    }
+    .p-bar {
+      background: #071827; padding: 8px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #0d1e30;
+    }
+    .p-logo { font-size: 8.5px; font-weight: 900; color: var(--gold); letter-spacing: 0.6px; }
+    .p-docnum {
+      font-size: 8px; font-weight: 700; color: var(--text-dim);
+      background: #0a1e32; padding: 2px 7px; border-radius: 4px;
+    }
+    .p-body { padding: 9px 12px 0; }
+    .p-label { font-size: 6.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 2px; }
+    .p-val   { font-size: 9px; font-weight: 600; color: var(--text); margin-bottom: 7px; }
+    .p-total {
+      background: rgba(201,162,39,0.1); border: 1px solid rgba(201,162,39,0.22);
+      border-radius: 7px; padding: 7px 10px; margin: 6px 0 8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .p-total-lbl { font-size: 7.5px; color: var(--text-muted); font-weight: 600; }
+    .p-total-amt { font-size: 15px; color: var(--gold); font-weight: 900; }
+    .p-sec-head {
+      font-size: 6.5px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim);
+      border-top: 1px solid #0f2240; padding-top: 5px; margin-bottom: 3px;
+    }
+    .p-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 3.5px 0; border-bottom: 1px solid rgba(255,255,255,0.025);
+    }
+    .p-row-name { font-size: 7.5px; color: var(--text-muted); flex: 1; }
+    .p-badge {
+      font-size: 5.5px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+      background: var(--gold-dim); color: var(--gold); margin: 0 5px;
+    }
+    .p-row-amt { font-size: 8px; color: var(--gold); font-weight: 700; }
+    .p-phases {
+      display: flex; gap: 3px; margin: 8px 0 2px;
+    }
+    .p-phase {
+      flex: 1; background: #071827; border: 1px solid #0f2240;
+      border-radius: 4px; padding: 4px 2px; text-align: center;
+    }
+    .p-phase-lbl { font-size: 5.5px; color: var(--text-dim); }
+    .p-phase-pct { font-size: 8px; color: var(--gold); font-weight: 700; }
+    .p-actions {
+      display: flex; gap: 4px; padding: 8px 12px 0;
+    }
+    .p-btn {
+      flex: 1; text-align: center; padding: 5px 2px;
+      border-radius: 5px; font-size: 6.5px; font-weight: 700;
+    }
+    .p-btn-g  { background: var(--gold); color: var(--navy); }
+    .p-btn-ol { background: #071827; color: var(--text-muted); border: 1px solid #1e3a55; }
+
+    /* Floating side badges */
+    .side-badge {
+      background: var(--navy-card); border: 1px solid var(--border);
+      border-radius: 11px; padding: 9px 13px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+    }
+    .side-badge-label { font-size: 10px; color: var(--text-muted); margin-bottom: 2px; }
+    .side-badge-val   { font-size: 16px; font-weight: 800; color: var(--gold); }
+
+    /* ── Section base ── */
+    section { padding: 76px 20px; }
+    .sec-tag {
+      display: inline-block; font-size: 10.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1.6px; color: var(--gold);
+      margin-bottom: 10px;
+    }
+    .sec-title {
+      font-size: clamp(26px, 5vw, 44px); font-weight: 900; line-height: 1.18;
+      letter-spacing: -0.8px; color: #fff; margin-bottom: 14px;
+    }
+    .sec-sub {
+      font-size: 16px; color: var(--text-muted); line-height: 1.7;
+      max-width: 560px;
+    }
+    .centered { text-align: center; }
+    .centered .sec-sub { margin: 0 auto; }
+
+    /* ── Problem ── */
+    .problem { background: var(--navy-card); }
+    .pain-grid {
+      display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 44px;
+    }
+    .pain-card {
+      background: #041020; border: 1px solid var(--border);
+      border-radius: var(--r); padding: 20px 22px;
+      display: flex; gap: 16px; align-items: flex-start;
+      transition: border-color 0.2s;
+    }
+    .pain-card:hover { border-color: rgba(201,162,39,0.3); }
+    .pain-ico  { font-size: 26px; flex-shrink: 0; margin-top: 1px; }
+    .pain-h    { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 5px; }
+    .pain-body { font-size: 13px; color: var(--text-muted); line-height: 1.62; }
+
+    /* ── Solution ── */
+    .solution { background: var(--navy); }
+    .feat-grid {
+      display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 46px;
+    }
+    .feat-card {
+      background: var(--navy-card); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 28px 24px;
+      transition: border-color 0.2s, transform 0.2s;
+      position: relative; overflow: hidden;
+    }
+    .feat-card::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .feat-card:hover { border-color: rgba(201,162,39,0.38); transform: translateY(-3px); }
+    .feat-card:hover::after { opacity: 1; }
+    .feat-ico  { font-size: 34px; margin-bottom: 14px; }
+    .feat-h    { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    .feat-body { font-size: 13.5px; color: var(--text-muted); line-height: 1.68; }
+    .feat-chip {
+      display: inline-block; margin-top: 13px;
+      font-size: 11px; font-weight: 700; color: var(--gold);
+      background: var(--gold-dim); padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ── How it works ── */
+    .how { background: #06111f; }
+    .steps { display: flex; flex-direction: column; gap: 28px; margin-top: 46px; }
+    .step { display: flex; gap: 20px; align-items: flex-start; }
+    .step-num {
+      width: 46px; height: 46px; min-width: 46px; border-radius: 50%;
+      background: var(--gold); color: var(--navy);
+      font-size: 21px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 0 5px rgba(201,162,39,0.14); flex-shrink: 0;
+    }
+    .step-h    { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+    .step-body { font-size: 14px; color: var(--text-muted); line-height: 1.68; }
+
+    /* ── Pricing ── */
+    .pricing { background: var(--navy); }
+    .price-card {
+      background: var(--navy-card); border: 2px solid rgba(201,162,39,0.38);
+      border-radius: var(--r-lg); padding: 38px 32px;
+      max-width: 500px; margin: 44px auto 0;
+      position: relative; overflow: hidden;
+    }
+    .price-card::before {
+      content: ''; position: absolute; top: -80px; right: -80px;
+      width: 240px; height: 240px;
+      background: radial-gradient(circle, var(--gold-glow), transparent 70%);
+    }
+    .price-pill {
+      display: inline-block;
+      background: var(--gold); color: var(--navy);
+      font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+      padding: 4px 12px; border-radius: 20px; margin-bottom: 20px;
+    }
+    .price-amt {
+      font-size: 62px; font-weight: 900; color: var(--gold);
+      line-height: 1; letter-spacing: -3px; margin-bottom: 4px;
+    }
+    .price-amt sup { font-size: 28px; vertical-align: top; margin-top: 12px; display: inline-block; letter-spacing: 0; }
+    .price-amt sub { font-size: 20px; font-weight: 600; color: var(--text-muted); letter-spacing: 0; }
+    .price-trial { font-size: 14px; color: var(--green); font-weight: 600; margin: 8px 0 26px; }
+    .price-feats { list-style: none; margin-bottom: 28px; display: flex; flex-direction: column; gap: 12px; }
+    .price-feats li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--text); }
+    .price-feats li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .price-fine { text-align: center; font-size: 12px; color: var(--text-dim); margin-top: 14px; }
+
+    /* ── Story ── */
+    .story { background: var(--navy-card); }
+    .story-inner { max-width: 700px; margin: 0 auto; }
+    .story-pull {
+      font-size: clamp(17px, 3vw, 22px); font-style: italic; color: var(--text);
+      line-height: 1.75; margin: 24px 0; position: relative; padding-left: 22px;
+    }
+    .story-pull::before {
+      content: '"'; position: absolute; left: 0; top: -12px;
+      font-size: 64px; color: var(--gold); font-style: normal; line-height: 1; opacity: 0.55;
+    }
+    .story-body {
+      font-size: 15px; color: var(--text-muted); line-height: 1.8; margin-bottom: 28px;
+    }
+    .story-body p + p { margin-top: 14px; }
+    .story-sig { display: flex; align-items: center; gap: 16px; }
+    .story-avatar {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--gold-dim); border: 2px solid rgba(201,162,39,0.35);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .story-name  { font-size: 15px; font-weight: 700; color: #fff; }
+    .story-title { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ── Final CTA ── */
+    .final {
+      background: linear-gradient(135deg, #081522 0%, #0d2241 50%, #0a1628 100%);
+      text-align: center; padding: 88px 20px;
+      position: relative; overflow: hidden;
+    }
+    .final::before {
+      content: ''; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 700px; height: 450px;
+      background: radial-gradient(ellipse, rgba(201,162,39,0.1) 0%, transparent 68%);
+      pointer-events: none;
+    }
+    .final h2 {
+      font-size: clamp(30px, 5.5vw, 52px); font-weight: 900; color: #fff;
+      letter-spacing: -1px; margin-bottom: 14px; position: relative;
+    }
+    .final p {
+      font-size: 16px; color: var(--text-muted); margin-bottom: 34px; position: relative;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--navy-deep); border-top: 1px solid var(--border);
+      padding: 28px 20px; text-align: center;
+    }
+    .foot-logo { display: flex; align-items: center; gap: 8px; justify-content: center; margin-bottom: 12px; }
+    .foot-logo img  { height: 26px; }
+    .foot-logo span { font-size: 14px; font-weight: 900; color: var(--gold); }
+    .foot-links { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; margin-bottom: 12px; }
+    .foot-links a  { font-size: 12px; color: var(--text-muted); transition: color 0.15s; }
+    .foot-links a:hover { color: var(--gold); }
+    .foot-copy { font-size: 11px; color: var(--text-dim); }
+
+    /* ── Scroll reveal ── */
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.52s ease, transform 0.52s ease; }
+    .reveal.in { opacity: 1; transform: translateY(0); }
+    .reveal-d1 { transition-delay: 0.08s; }
+    .reveal-d2 { transition-delay: 0.16s; }
+    .reveal-d3 { transition-delay: 0.24s; }
+    .reveal-d4 { transition-delay: 0.32s; }
+
+    /* ── Responsive ── */
+    @media (min-width: 600px) {
+      .pain-grid { grid-template-columns: 1fr 1fr; }
+      .feat-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (min-width: 900px) {
+      .feat-grid { grid-template-columns: repeat(4, 1fr); }
+      .steps { flex-direction: row; }
+      .step { flex-direction: column; align-items: center; text-align: center; flex: 1; }
+      .hero-layout { flex-direction: row; align-items: center; gap: 60px; }
+      .hero-text { text-align: left; }
+      .hero-ctas { justify-content: flex-start; }
+    }
+    @media (max-width: 599px) {
+      .side-badge { display: none; }
+      .header-actions .btn-ghost { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════ HEADER ══════════════════════ -->
+<header>
+  <div class="header-inner">
+    <a href="/landing" class="logo" aria-label="FieldQuote home">
+      <img src="/logo.svg" alt="" aria-hidden="true" />
+      <span class="logo-text">FieldQuote</span>
+    </a>
+    <div class="header-actions">
+      <div class="lang-pill" role="group" aria-label="Language">
+        <button class="lang-btn active" id="btn-en" onclick="setLang('en')" aria-pressed="true">EN</button>
+        <button class="lang-btn"        id="btn-es" onclick="setLang('es')" aria-pressed="false">ES</button>
+      </div>
+      <a href="/" class="btn btn-ghost" style="padding:8px 16px;font-size:13px">
+        <span class="en">Sign In</span><span class="es">Iniciar Sesión</span>
+      </a>
+      <a href="/" class="btn btn-gold" style="padding:8px 16px;font-size:13px">
+        <span class="en">Free Trial</span><span class="es">Prueba Gratis</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════ HERO ══════════════════════ -->
+<section class="hero">
+  <div class="wrap hero-layout">
+
+    <!-- Text side -->
+    <div class="hero-text">
+      <p class="eyebrow">
+        <span class="en">Built for plumbers · Used in the field</span>
+        <span class="es">Creado para plomeros · Usado en el campo</span>
+      </p>
+      <h1>
+        <span class="en">Quote Jobs Faster.<br><em>Get Paid Sooner.</em></span>
+        <span class="es">Cotiza Más Rápido.<br><em>Cobra Más Pronto.</em></span>
+      </h1>
+      <p class="hero-sub">
+        <span class="en">Create professional plumbing quotes and invoices from your phone in minutes — not hours. AI blueprint analysis, digital signatures, and online payments included.</span>
+        <span class="es">Crea cotizaciones y facturas de plomería profesionales desde tu teléfono en minutos. Análisis de planos con IA, firmas digitales y cobros en línea incluidos.</span>
+      </p>
+      <div class="hero-ctas">
+        <a href="/" class="btn btn-gold btn-lg">
+          <span class="en">Start Free 30-Day Trial</span>
+          <span class="es">Comienza tu Prueba Gratis de 30 Días</span>
+        </a>
+        <a href="#how" class="btn btn-ghost btn-lg">
+          <span class="en">See How It Works</span>
+          <span class="es">Ver Cómo Funciona</span>
+        </a>
+      </div>
+      <p class="hero-fine">
+        <span class="en">No credit card required · Cancel anytime</span>
+        <span class="es">Sin tarjeta de crédito · Cancela cuando quieras</span>
+      </p>
+    </div>
+
+    <!-- Phone mockup side -->
+    <div class="phone-outer reveal">
+      <!-- Left floating badge -->
+      <div class="side-badge" style="align-self:flex-start;margin-top:80px">
+        <div class="side-badge-label en">AI detected</div>
+        <div class="side-badge-label es">IA detectó</div>
+        <div class="side-badge-val">24 fixtures</div>
+      </div>
+
+      <!-- Phone -->
+      <div class="phone" role="img" aria-label="FieldQuote app screenshot showing a quote for Martinez Construction">
+        <div class="phone-notch"></div>
+        <div class="p-screen">
+          <div class="p-bar">
+            <span class="p-logo">⚡ FIELDQUOTE</span>
+            <span class="p-docnum">Q-047</span>
+          </div>
+          <div class="p-body">
+            <div class="p-label">Client</div>
+            <div class="p-val">Martinez Construction</div>
+            <div class="p-label">Address</div>
+            <div class="p-val" style="margin-bottom:4px">1420 Oak Creek Dr, Austin TX</div>
+            <div class="p-total">
+              <div>
+                <div class="p-total-lbl">TOTAL</div>
+                <div class="p-total-amt">$48,600</div>
+              </div>
+              <div style="text-align:right">
+                <div class="p-total-lbl">PROJECT</div>
+                <div style="font-size:7.5px;color:var(--text-muted);font-weight:600">New Construction</div>
+              </div>
+            </div>
+            <div class="p-sec-head">Services</div>
+            <div class="p-row">
+              <span class="p-row-name">Sewer Line</span>
+              <span class="p-row-amt">$8,400</span>
+            </div>
+            <div class="p-row">
+              <span class="p-row-name">Water Heater</span>
+              <span class="p-badge">Fixed</span>
+              <span class="p-row-amt">$3,200</span>
+            </div>
+            <div class="p-row">
+              <span class="p-row-name">Gas System</span>
+              <span class="p-badge">% Based</span>
+              <span class="p-row-amt">$4,100</span>
+            </div>
+            <div class="p-row">
+              <span class="p-row-name">Repiping</span>
+              <span class="p-badge">2-Pay</span>
+              <span class="p-row-amt">$6,500</span>
+            </div>
+            <div class="p-phases">
+              <div class="p-phase"><div class="p-phase-lbl">Underground</div><div class="p-phase-pct">30%</div></div>
+              <div class="p-phase"><div class="p-phase-lbl">Rough-In</div><div class="p-phase-pct">50%</div></div>
+              <div class="p-phase"><div class="p-phase-lbl">Trim</div><div class="p-phase-pct">20%</div></div>
+            </div>
+          </div>
+          <div class="p-actions">
+            <div class="p-btn p-btn-g">Save</div>
+            <div class="p-btn p-btn-ol">PDF</div>
+            <div class="p-btn p-btn-ol">✍ Sign</div>
+            <div class="p-btn p-btn-ol">$ Pay</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right floating badge -->
+      <div class="side-badge" style="align-self:flex-end;margin-bottom:80px">
+        <div class="side-badge-label" style="color:var(--green)">✓ Signed &amp; Sent</div>
+        <div class="side-badge-val">$48,600</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════ PROBLEM ══════════════════════ -->
+<section class="problem">
+  <div class="wrap centered">
+    <p class="sec-tag"><span class="en">The Problem</span><span class="es">El Problema</span></p>
+    <h2 class="sec-title">
+      <span class="en">How Much Time Do You Waste<br>Quoting Jobs by Hand?</span>
+      <span class="es">¿Cuánto Tiempo Pierdes<br>Cotizando Trabajos a Mano?</span>
+    </h2>
+    <p class="sec-sub">
+      <span class="en">Most plumbers are still using pen and paper — or nothing at all. Here's what that's costing you every single job.</span>
+      <span class="es">La mayoría de los plomeros todavía usan papel y lápiz. Esto es lo que te cuesta en cada trabajo.</span>
+    </p>
+    <div class="pain-grid">
+      <div class="pain-card reveal reveal-d1">
+        <span class="pain-ico">😤</span>
+        <div>
+          <p class="pain-h"><span class="en">Handwritten quotes look unprofessional</span><span class="es">Las cotizaciones a mano se ven poco profesionales</span></p>
+          <p class="pain-body"><span class="en">Clients compare you to contractors who text a clean PDF. First impressions cost jobs — and money.</span><span class="es">Los clientes te comparan con contratistas que envían PDFs limpios. Las primeras impresiones cuestan trabajos.</span></p>
+        </div>
+      </div>
+      <div class="pain-card reveal reveal-d2">
+        <span class="pain-ico">💸</span>
+        <div>
+          <p class="pain-h"><span class="en">Forgetting services leaves money on the table</span><span class="es">Olvidar servicios te cuesta dinero</span></p>
+          <p class="pain-body"><span class="en">A missed permit fee, gas riser, or hose bib adds up fast. You do the work but never billed for it.</span><span class="es">Un permiso olvidado, el raiser de gas, la llave exterior. Haces el trabajo pero no lo cobras.</span></p>
+        </div>
+      </div>
+      <div class="pain-card reveal reveal-d3">
+        <span class="pain-ico">📄</span>
+        <div>
+          <p class="pain-h"><span class="en">Paper quotes get lost before they're signed</span><span class="es">Las cotizaciones en papel se pierden antes de firmar</span></p>
+          <p class="pain-body"><span class="en">No signed record means no protection if the client disputes the price later. You re-quote from memory.</span><span class="es">Sin registro firmado, no tienes protección si el cliente disputa el precio. Vuelves a cotizar de memoria.</span></p>
+        </div>
+      </div>
+      <div class="pain-card reveal reveal-d4">
+        <span class="pain-ico">🤷</span>
+        <div>
+          <p class="pain-h"><span class="en">No way to know who's actually paid</span><span class="es">Sin forma de saber quién ha pagado</span></p>
+          <p class="pain-body"><span class="en">Chasing payments by text and memory. You forget who paid the rough-in, who still owes the trim phase.</span><span class="es">Persigues pagos por mensaje y de memoria. Olvidas quién pagó el rough-in, quién debe la fase de trim.</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════ SOLUTION ══════════════════════ -->
+<section class="solution">
+  <div class="wrap centered">
+    <p class="sec-tag"><span class="en">The Solution</span><span class="es">La Solución</span></p>
+    <h2 class="sec-title">
+      <span class="en">Everything You Need,<br>Built for Plumbers</span>
+      <span class="es">Todo Lo Que Necesitas,<br>Creado para Plomeros</span>
+    </h2>
+    <p class="sec-sub">
+      <span class="en">FieldQuote handles quoting, invoicing, signatures, and payments — so you can stay focused on the job.</span>
+      <span class="es">FieldQuote maneja cotizaciones, facturas, firmas y pagos — para que te enfoques en el trabajo.</span>
+    </p>
+    <div class="feat-grid">
+      <div class="feat-card reveal reveal-d1">
+        <div class="feat-ico">📐</div>
+        <p class="feat-h"><span class="en">AI Blueprint Analysis</span><span class="es">Análisis de Planos con IA</span></p>
+        <p class="feat-body"><span class="en">Upload a floor plan — PDF or photo — and Claude AI counts every fixture automatically: water heaters, gas lines, sinks, showers, hose bibs. Done in seconds.</span><span class="es">Sube un plano y la IA cuenta cada accesorio automáticamente: calentadores, líneas de gas, lavabos, duchas, llaves. Listo en segundos.</span></p>
+        <span class="feat-chip"><span class="en">Save 30+ min per bid</span><span class="es">Ahorra 30+ min por licitación</span></span>
+      </div>
+      <div class="feat-card reveal reveal-d2">
+        <div class="feat-ico">⚙️</div>
+        <p class="feat-h"><span class="en">Flexible Billing Modes</span><span class="es">Modos de Facturación Flexibles</span></p>
+        <p class="feat-body"><span class="en">Bill each service the way it makes sense: % Based (splits with your phase schedule), Fixed (independent line item), or 2-Payment (start + completion). Per service, per job.</span><span class="es">Factura cada servicio como corresponde: % Basado, Precio Fijo, o 2 Pagos (inicio + finalización). Por servicio, por trabajo.</span></p>
+        <span class="feat-chip"><span class="en">New Construction ready</span><span class="es">Para construcción nueva</span></span>
+      </div>
+      <div class="feat-card reveal reveal-d3">
+        <div class="feat-ico">📄</div>
+        <p class="feat-h"><span class="en">Auto PDF Quotes &amp; Invoices</span><span class="es">PDF Automáticos con tu Logo</span></p>
+        <p class="feat-body"><span class="en">Professional branded PDFs with your logo, client details, phase schedule, and payment breakdown. Share by text in one tap. Digital signature built right in.</span><span class="es">PDFs con tu logo, datos del cliente, programa de fases y desglose de pagos. Comparte por mensaje en un toque. Firma digital incluida.</span></p>
+        <span class="feat-chip"><span class="en">Signature + Stripe payments</span><span class="es">Firma + cobros con Stripe</span></span>
+      </div>
+      <div class="feat-card reveal reveal-d4">
+        <div class="feat-ico">🌐</div>
+        <p class="feat-h"><span class="en">Bilingual — English &amp; Spanish</span><span class="es">Bilingüe — Inglés y Español</span></p>
+        <p class="feat-body"><span class="en">The full app works in both languages. Invite your whole crew — each team member gets their own login. No App Store needed: install it directly on any phone.</span><span class="es">La app completa en inglés y español. Invita a tu equipo — cada miembro tiene su propio acceso. Sin App Store: instálala directamente en cualquier teléfono.</span></p>
+        <span class="feat-chip"><span class="en">Built for bilingual crews</span><span class="es">Para equipos bilingües</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════ HOW IT WORKS ══════════════════════ -->
+<section class="how" id="how">
+  <div class="wrap centered">
+    <p class="sec-tag"><span class="en">How It Works</span><span class="es">Cómo Funciona</span></p>
+    <h2 class="sec-title">
+      <span class="en">Start Quoting in 3 Steps</span>
+      <span class="es">Comienza a Cotizar en 3 Pasos</span>
+    </h2>
+    <p class="sec-sub">
+      <span class="en">No training required. If you can send a text message, you can use FieldQuote.</span>
+      <span class="es">No se requiere capacitación. Si puedes enviar un mensaje, puedes usar FieldQuote.</span>
+    </p>
+    <div class="steps">
+      <div class="step reveal reveal-d1">
+        <div class="step-num">1</div>
+        <div>
+          <p class="step-h"><span class="en">Sign Up Free</span><span class="es">Regístrate Gratis</span></p>
+          <p class="step-body"><span class="en">Create your account in 60 seconds. Set up your company name, add contractor names, and upload your logo. No credit card, no commitment.</span><span class="es">Crea tu cuenta en 60 segundos. Configura el nombre de tu empresa, agrega tus contratistas y sube tu logo. Sin tarjeta de crédito.</span></p>
+        </div>
+      </div>
+      <div class="step reveal reveal-d2">
+        <div class="step-num">2</div>
+        <div>
+          <p class="step-h"><span class="en">Build Your Quote</span><span class="es">Crea Tu Cotización</span></p>
+          <p class="step-body"><span class="en">Enter client info, add services, upload a blueprint for instant AI fixture counts, or tap ⚡ Quick Estimate from the job site. The total calculates live as you type.</span><span class="es">Ingresa la información del cliente, agrega servicios, sube un plano para conteo automático de accesorios, o toca ⚡ Estimado Rápido desde el trabajo. El total se calcula en tiempo real.</span></p>
+        </div>
+      </div>
+      <div class="step reveal reveal-d3">
+        <div class="step-num">3</div>
+        <div>
+          <p class="step-h"><span class="en">Send, Sign &amp; Get Paid</span><span class="es">Envía, Firma y Cobra</span></p>
+          <p class="step-body"><span class="en">Share the quote by text. Your client signs digitally on their phone — no app needed on their end. Convert to invoice, send a payment link, and watch it get marked Paid automatically.</span><span class="es">Comparte la cotización por mensaje. Tu cliente firma digitalmente en su teléfono. Convierte a factura, envía un enlace de pago y se marca como Pagado automáticamente.</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════ PRICING ══════════════════════ -->
+<section class="pricing" id="pricing">
+  <div class="wrap centered">
+    <p class="sec-tag"><span class="en">Pricing</span><span class="es">Precio</span></p>
+    <h2 class="sec-title">
+      <span class="en">Simple, Honest Pricing</span>
+      <span class="es">Precio Simple y Honesto</span>
+    </h2>
+    <p class="sec-sub">
+      <span class="en">One plan. Everything included. No upsells, no per-user fees, no surprises.</span>
+      <span class="es">Un plan. Todo incluido. Sin costos extra por usuario, sin sorpresas.</span>
+    </p>
+    <div class="price-card reveal">
+      <div class="price-pill"><span class="en">30-Day Free Trial</span><span class="es">Prueba Gratis 30 Días</span></div>
+      <div class="price-amt"><sup>$</sup>39<sub>&nbsp;/mo</sub></div>
+      <p class="price-trial">
+        <span class="en">✓ Try free for 30 days — no credit card required</span>
+        <span class="es">✓ Prueba gratis 30 días — sin tarjeta de crédito</span>
+      </p>
+      <ul class="price-feats">
+        <li><span class="en">Unlimited quotes &amp; invoices</span><span class="es">Cotizaciones y facturas ilimitadas</span></li>
+        <li><span class="en">AI blueprint analysis (Claude AI)</span><span class="es">Análisis de planos con IA (Claude AI)</span></li>
+        <li><span class="en">Digital client signatures</span><span class="es">Firmas digitales del cliente</span></li>
+        <li><span class="en">Online payment collection via Stripe</span><span class="es">Cobro en línea vía Stripe</span></li>
+        <li><span class="en">Unlimited team members</span><span class="es">Miembros del equipo ilimitados</span></li>
+        <li><span class="en">Mileage tracking &amp; IRS export</span><span class="es">Seguimiento de millas y exportación IRS</span></li>
+        <li><span class="en">Bilingual — English &amp; Spanish</span><span class="es">Bilingüe — Inglés y Español</span></li>
+        <li><span class="en">Installs as a phone app (no App Store)</span><span class="es">Se instala como app (sin App Store)</span></li>
+      </ul>
+      <a href="/" class="btn btn-gold btn-lg" style="width:100%;display:flex">
+        <span class="en">Start Your Free 30-Day Trial</span>
+        <span class="es">Comienza tu Prueba Gratis de 30 Días</span>
+      </a>
+      <p class="price-fine">
+        <span class="en">Cancel anytime · No contracts · No hidden fees</span>
+        <span class="es">Cancela cuando quieras · Sin contratos · Sin cargos ocultos</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════ CREATOR STORY ══════════════════════ -->
+<section class="story">
+  <div class="wrap">
+    <div class="story-inner">
+      <p class="sec-tag"><span class="en">From the Creator</span><span class="es">Del Creador</span></p>
+      <h2 class="sec-title">
+        <span class="en">Built by a Plumber,<br>for Plumbers</span>
+        <span class="es">Creado por un Plomero,<br>para Plomeros</span>
+      </h2>
+      <blockquote class="story-pull">
+        <span class="en">"This wasn't built by a programmer. It was built by me — a plumber who knows what it's really like to quote a job from the truck, under pressure, with the client standing right there waiting."</span>
+        <span class="es">"Esto no fue creado por un programador. Fue creado por mí — un plomero que sabe cómo se siente cotizar un trabajo desde la camioneta, bajo presión, con el cliente esperando al lado."</span>
+      </blockquote>
+      <div class="story-body">
+        <span class="en">
+          <p>My name is David. I'm a licensed plumber and contractor in Texas. For years I wrote quotes by hand on the back of invoices, forgot to bill for line items, lost track of who owed what, and showed up to client meetings with scraps of paper.</p>
+          <p>I tried spreadsheets. I tried generic invoicing apps. None of them understood how plumbing jobs actually work — the phase schedules, the billing modes, the difference between a new construction job and a service call.</p>
+          <p>So I built FieldQuote. I built it because I needed it. And if you're a plumber who's still quoting by hand, I built it for you too.</p>
+        </span>
+        <span class="es">
+          <p>Mi nombre es David. Soy plomero y contratista con licencia en Texas. Por años escribí cotizaciones a mano en el reverso de facturas, olvidé cobrar servicios, perdí el control de quién debía qué, y llegué a reuniones con papeles sueltos.</p>
+          <p>Intenté hojas de cálculo. Intenté aplicaciones genéricas de facturación. Ninguna entendía cómo funcionan realmente los trabajos de plomería — los programas de fases, los modos de facturación, la diferencia entre construcción nueva y una llamada de servicio.</p>
+          <p>Así que construí FieldQuote. Lo construí porque lo necesitaba. Y si eres un plomero que todavía cotiza a mano, lo construí para ti también.</p>
+        </span>
+      </div>
+      <div class="story-sig">
+        <div class="story-avatar" aria-hidden="true">🔧</div>
+        <div>
+          <p class="story-name">David Morales</p>
+          <p class="story-title">
+            <span class="en">Licensed Plumber &amp; Contractor — Texas</span>
+            <span class="es">Plomero y Contratista con Licencia — Texas</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════ FINAL CTA ══════════════════════ -->
+<section class="final">
+  <div class="wrap">
+    <h2>
+      <span class="en">Ready to Quote Faster?</span>
+      <span class="es">¿Listo para Cotizar Más Rápido?</span>
+    </h2>
+    <p>
+      <span class="en">Join plumbing contractors who've already replaced pen and paper with FieldQuote.</span>
+      <span class="es">Únete a los contratistas de plomería que ya reemplazaron el papel con FieldQuote.</span>
+    </p>
+    <a href="/" class="btn btn-gold btn-xl">
+      <span class="en">Start Your Free Trial Today</span>
+      <span class="es">Comienza tu Prueba Gratis Hoy</span>
+    </a>
+    <p style="font-size:13px;color:var(--text-dim);margin-top:16px;position:relative">
+      <span class="en">30 days free · No credit card · Cancel anytime</span>
+      <span class="es">30 días gratis · Sin tarjeta · Cancela cuando quieras</span>
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════════ FOOTER ══════════════════════ -->
+<footer>
+  <div class="foot-logo">
+    <img src="/logo.svg" alt="" aria-hidden="true" />
+    <span>FieldQuote</span>
+  </div>
+  <nav class="foot-links" aria-label="Footer links">
+    <a href="/"><span class="en">Sign In</span><span class="es">Iniciar Sesión</span></a>
+    <a href="/#pricing"><span class="en">Pricing</span><span class="es">Precio</span></a>
+    <a href="/terms"><span class="en">Terms of Service</span><span class="es">Términos de Servicio</span></a>
+    <a href="/privacy"><span class="en">Privacy Policy</span><span class="es">Política de Privacidad</span></a>
+  </nav>
+  <p class="foot-copy">
+    © 2026 FieldQuote ·
+    <span class="en">Built by a plumber, for plumbers.</span>
+    <span class="es">Creado por un plomero, para plomeros.</span>
+  </p>
+</footer>
+
+<script>
+  /* ── Language toggle ── */
+  function setLang(lang) {
+    const isEs = lang === 'es';
+    document.querySelectorAll('.en').forEach(el => { el.style.display = isEs ? 'none' : ''; });
+    document.querySelectorAll('.es').forEach(el => { el.style.display = isEs ? ''   : 'none'; });
+    document.getElementById('btn-en').classList.toggle('active', !isEs);
+    document.getElementById('btn-es').classList.toggle('active',  isEs);
+    document.getElementById('btn-en').setAttribute('aria-pressed', String(!isEs));
+    document.getElementById('btn-es').setAttribute('aria-pressed', String( isEs));
+    document.documentElement.lang = lang;
+    try { localStorage.setItem('fq-lang', lang); } catch(e) {}
+  }
+
+  /* Restore saved language on load */
+  (function () {
+    /* Hide all ES elements first */
+    document.querySelectorAll('.es').forEach(el => { el.style.display = 'none'; });
+    try {
+      var saved = localStorage.getItem('fq-lang');
+      if (saved === 'es') setLang('es');
+    } catch(e) {}
+  })();
+
+  /* ── Scroll reveal ── */
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -36px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(function(el) {
+    observer.observe(el);
+  });
+
+  /* Trigger hero phone immediately (it's in the viewport) */
+  document.querySelectorAll('.hero .reveal').forEach(function(el) {
+    setTimeout(function() { el.classList.add('in'); }, 200);
+  });
+</script>
+
+</body>
+</html>
