@@ -4225,17 +4225,57 @@ function HelpPanel({ onClose }) {
     {
       title: 'Install FieldQuote on Your Phone',
       icon: '📱',
-      desc: 'Add FieldQuote to your home screen for a real app icon and full-screen experience — no App Store or Google Play needed.',
-      tip: 'Once installed, FieldQuote launches full-screen just like a native app. It works on both iPhone and Android.',
-      steps: [
-        <><span style={STEP_HEAD}>iPhone (Safari)</span>{' '}Open fieldquotehq.com in Safari. Tap the Share button (the square with an arrow pointing up, at the bottom of the screen). Scroll down in the share sheet and tap "Add to Home Screen". Keep the name "FieldQuote" and tap Add in the top-right corner.</>,
-        <><span style={STEP_HEAD}>Android (Chrome)</span>{' '}Open fieldquotehq.com in Chrome. Tap the 3-dot menu in the top-right corner. Tap "Add to Home Screen" or "Install App". Tap Install to confirm. A FieldQuote icon appears on your home screen immediately.</>,
-        'Once installed, tap the FieldQuote icon on your home screen to launch the app in full-screen mode — no browser address bar, no distractions. It looks and feels like a native app.',
-        'No App Store or Google Play required. The app installs directly from the website in seconds.',
-        'The installed app always runs the latest version automatically — no manual updates needed.',
-        'iPhone only: you must use Safari specifically. The Add to Home Screen option is not available in Chrome or Firefox on iOS.',
-        'Android: Chrome, Samsung Internet, and most Android browsers support installation.',
-      ]
+      steps: [],
+      body: (
+        <div>
+          <div style={{ background:`${GOLD}18`, border:`1px solid ${GOLD}44`, borderRadius:8, padding:'12px 16px', marginBottom:14 }}>
+            <div style={{ color:GOLD, fontWeight:700, fontSize:15, marginBottom:6 }}>FieldQuote Works as an App on Your Phone!</div>
+            <div style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.65 }}>
+              You don't need the App Store or Google Play. Just visit <strong style={{ color:GOLD }}>fieldquotehq.com</strong> on your phone's browser and install it directly — it works exactly like a real app, with its own icon on your home screen.
+            </div>
+          </div>
+
+          <div style={{ background:'#071827', border:'1px solid #1e3a55', borderRadius:8, padding:'14px 16px', marginBottom:10 }}>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:18 }}>🍎</span> iPhone — use Safari
+            </div>
+            {[
+              'Open Safari and go to fieldquotehq.com',
+              'Tap the Share icon (the square with an arrow pointing up) at the bottom of the screen',
+              'Scroll down and tap "Add to Home Screen"',
+              'Tap "Add" in the top-right corner — done!',
+            ].map((t, i) => (
+              <div key={i} style={{ display:'flex', gap:10, marginBottom:8, alignItems:'flex-start' }}>
+                <span style={{ background:GOLD, color:NAVY, borderRadius:'50%', width:20, height:20, minWidth:20, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, marginTop:1 }}>{i + 1}</span>
+                <span style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.6 }}>{t}</span>
+              </div>
+            ))}
+            <div style={{ marginTop:6, paddingLeft:30, fontSize:11, color:'#7f98b0' }}>⚠️ Must use Safari — Chrome and Firefox on iPhone don't support this.</div>
+          </div>
+
+          <div style={{ background:'#071827', border:'1px solid #1e3a55', borderRadius:8, padding:'14px 16px', marginBottom:14 }}>
+            <div style={{ color:'#fff', fontWeight:700, fontSize:13, marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontSize:18 }}>🤖</span> Android — use Chrome
+            </div>
+            {[
+              'Open Chrome and go to fieldquotehq.com',
+              'Tap the 3-dot menu (⋮) in the top-right corner',
+              'Tap "Install app" or "Add to Home Screen"',
+              'Tap "Install" to confirm — done!',
+            ].map((t, i) => (
+              <div key={i} style={{ display:'flex', gap:10, marginBottom:8, alignItems:'flex-start' }}>
+                <span style={{ background:GOLD, color:NAVY, borderRadius:'50%', width:20, height:20, minWidth:20, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, marginTop:1 }}>{i + 1}</span>
+                <span style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.6 }}>{t}</span>
+              </div>
+            ))}
+            <div style={{ marginTop:6, paddingLeft:30, fontSize:11, color:'#7f98b0' }}>Also works with Samsung Internet and most other Android browsers.</div>
+          </div>
+
+          <div style={{ background:'#041020', border:`1px solid ${GOLD}55`, borderRadius:6, padding:'10px 14px', fontSize:12, color:'#c8d8e8', lineHeight:1.7 }}>
+            ✅ <strong style={{ color:GOLD }}>After install:</strong> Tap the FieldQuote icon on your home screen to launch full-screen — no browser bar, no distractions. Works for the account owner <em>and</em> every team member. The app always updates automatically — no downloads or app store visits needed.
+          </div>
+        </div>
+      ),
     },
   ]
 
@@ -4292,13 +4332,17 @@ function HelpPanel({ onClose }) {
               </button>
               {isOpen && (
                 <div style={{ padding:'0 18px 18px 52px' }}>
-                  <p style={{ color:'#9fb0c6', margin:'0 0 12px', fontSize:13, lineHeight:1.6 }}>{s.desc}</p>
-                  {s.tip && <div style={TIP_STYLE}>💡 {s.tip}</div>}
-                  <ol style={{ margin:0, padding:'0 0 0 20px' }}>
-                    {s.steps.map((step, j) => (
-                      <li key={j} style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.9, paddingLeft:4 }}>{step}</li>
-                    ))}
-                  </ol>
+                  {s.body ? s.body : (
+                    <>
+                      <p style={{ color:'#9fb0c6', margin:'0 0 12px', fontSize:13, lineHeight:1.6 }}>{s.desc}</p>
+                      {s.tip && <div style={TIP_STYLE}>💡 {s.tip}</div>}
+                      <ol style={{ margin:0, padding:'0 0 0 20px' }}>
+                        {s.steps.map((step, j) => (
+                          <li key={j} style={{ color:'#c8d8e8', fontSize:13, lineHeight:1.9, paddingLeft:4 }}>{step}</li>
+                        ))}
+                      </ol>
+                    </>
+                  )}
                 </div>
               )}
             </div>
