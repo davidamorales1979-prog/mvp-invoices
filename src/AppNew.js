@@ -141,6 +141,7 @@ export default function AppNew(){
   const [forgotPwEmail, setForgotPwEmail] = useState('')
   const [forgotPwMsg, setForgotPwMsg] = useState('')
   const [forgotPwLoading, setForgotPwLoading] = useState(false)
+  const [showInactivityWarning, setShowInactivityWarning] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [profile, setProfile] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -784,6 +785,44 @@ export default function AppNew(){
       }
     }
   }, [])
+
+  // Auto sign-out after 10 minutes of inactivity
+  useEffect(() => {
+    if (!user) return
+    const WARN_MS = 9 * 60 * 1000   // 9 min → show warning
+    const OUT_MS  = 10 * 60 * 1000  // 10 min → sign out
+    let warnTimer = null
+    let outTimer  = null
+    let lastReset = Date.now()
+
+    async function autoSignOut() {
+      setShowInactivityWarning(false)
+      await supabase.auth.signOut()
+      window.location.replace('/login?timeout=1')
+    }
+
+    function resetTimers() {
+      const now = Date.now()
+      if (now - lastReset < 5000) return  // throttle to once per 5 s
+      lastReset = now
+      setShowInactivityWarning(false)
+      clearTimeout(warnTimer)
+      clearTimeout(outTimer)
+      warnTimer = setTimeout(() => setShowInactivityWarning(true), WARN_MS)
+      outTimer  = setTimeout(autoSignOut, OUT_MS)
+    }
+
+    const EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click']
+    EVENTS.forEach(ev => window.addEventListener(ev, resetTimers, { passive: true }))
+    warnTimer = setTimeout(() => setShowInactivityWarning(true), WARN_MS)
+    outTimer  = setTimeout(autoSignOut, OUT_MS)
+
+    return () => {
+      clearTimeout(warnTimer)
+      clearTimeout(outTimer)
+      EVENTS.forEach(ev => window.removeEventListener(ev, resetTimers))
+    }
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (user) {
@@ -1639,6 +1678,13 @@ export default function AppNew(){
           <div style={{ textAlign:'center', marginBottom:20 }}>
             <img src='/logo.svg' alt='FieldQuote' style={{ height:90, width:'auto' }} />
           </div>
+          {new URLSearchParams(window.location.search).get('timeout') && (
+            <div style={{ marginBottom:16, padding:'10px 14px', background:'#1a0e00', border:'1px solid #c06020', borderRadius:7, fontSize:13, color:'#e8a070', lineHeight:1.6, textAlign:'center' }}>
+              You were signed out due to inactivity. Please sign in again.
+              <br />
+              <span style={{ fontSize:11, color:'#b07850' }}>Tu sesión expiró por inactividad. Por favor inicia sesión nuevamente.</span>
+            </div>
+          )}
           {showForgotPw ? (
             <>
               <h2 style={{ color:GOLD, marginBottom:8, textAlign:'center' }}>Reset Password</h2>
@@ -3089,6 +3135,24 @@ export default function AppNew(){
           accountId={accountId}
           counter={counter}
         />
+      )}
+
+      {/* Inactivity warning toast */}
+      {showInactivityWarning && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', zIndex:9999, background:'#1a1000', border:`2px solid ${GOLD}`, borderRadius:10, padding:'14px 20px', boxShadow:'0 8px 40px rgba(0,0,0,0.6)', maxWidth:400, width:'calc(100% - 40px)', textAlign:'center' }}>
+          <div style={{ color:GOLD, fontWeight:700, fontSize:14, marginBottom:4 }}>
+            You will be signed out in 1 minute due to inactivity.
+          </div>
+          <div style={{ color:'#9fb0c6', fontSize:12, marginBottom:10 }}>
+            Tu sesión cerrará en 1 minuto por inactividad.
+          </div>
+          <button
+            onClick={() => setShowInactivityWarning(false)}
+            style={{ padding:'6px 20px', background:GOLD, color:NAVY, border:'none', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:700 }}
+          >
+            Keep me signed in
+          </button>
+        </div>
       )}
     </div>
   )
