@@ -1834,7 +1834,7 @@ export default function AppNew(){
             />
           )}
           {activeView === 'help' && (
-            <HelpPanel onClose={() => setActiveView(null)} />
+            <HelpPanel onClose={() => setActiveView(null)} userEmail={user?.email || ''} />
           )}
         </div>
       </div>
@@ -3927,7 +3927,7 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId, us
   )
 }
 
-function HelpPanel({ onClose }) {
+function HelpPanel({ onClose, userEmail = '' }) {
   const [openSections, setOpenSections] = useState(new Set())
   function toggle(i) {
     setOpenSections(prev => {
@@ -4315,9 +4315,32 @@ function HelpPanel({ onClose }) {
 
   return (
     <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
         <h4 style={{ color:GOLD, margin:0 }}>Help &amp; Tutorial</h4>
-        <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button
+            onClick={() => {
+              const body = encodeURIComponent(
+                'Describe your issue here:\n\n' +
+                'Email: ' + userEmail + '\n' +
+                'Date: ' + new Date().toLocaleDateString() + '\n\n'
+              )
+              window.location.href = 'mailto:support@fieldquotehq.com?subject=FieldQuote%20Bug%20Report&body=' + body
+            }}
+            style={{ background:GOLD, color:NAVY, border:'none', padding:'5px 12px', borderRadius:6, cursor:'pointer', fontSize:12, fontWeight:700 }}
+          >
+            Report a Problem
+          </button>
+          <button onClick={onClose} style={{ background:'transparent', color:'#9fb0c6', border:'1px solid #334', padding:'4px 10px', borderRadius:6, cursor:'pointer' }}>✕ Close</button>
+        </div>
+      </div>
+
+      <div style={{ background:'#071827', border:'1px solid #1e3a55', borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ color:'#7f98b0', fontSize:12 }}>Support:</span>
+          <a href='mailto:support@fieldquotehq.com' style={{ color:GOLD, fontSize:12, textDecoration:'none', fontWeight:600 }}>support@fieldquotehq.com</a>
+        </div>
+        <span style={{ color:'#7f98b0', fontSize:11 }}>We typically respond within 24 hours</span>
       </div>
 
       {/* What's New card */}
