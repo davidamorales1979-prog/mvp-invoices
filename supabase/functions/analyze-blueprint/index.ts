@@ -53,7 +53,8 @@ RULE 3 — GAS FIXTURES (only mark if clearly shown in the floor plan):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - fix_gas_furnace: Mark ONLY if a furnace symbol or label (FURN, FAU, AC/HEAT) is visible
 - fix_gas_wh: Mark ONLY if a gas water heater symbol is found (as an individual unit fixture)
-- fix_gas_stove: Mark ONLY if the kitchen has a gas range / stove symbol or label (GAS RNG, RANGE, STOVE)
+- fix_gas_stove: Mark ONLY if the kitchen has a gas range / stove symbol or label (GAS RNG, RANGE, STOVE) — use for new construction gas connection
+- fix_gas_range: Mark ONLY if the plan explicitly labels a gas range installation or work order (e.g. "INSTALL GAS RANGE", "GAS RANGE INSTALL") — do NOT use if fix_gas_stove already applies; never mark both
 - fix_gas_dryer: Mark ONLY if laundry room is present (infer gas dryer hookup from laundry room)
 - fix_gas_bbq: Mark ONLY if outdoor BBQ / grill stub or label is shown on plan
 - fix_gas_generator: Mark ONLY if generator symbol or label is visible
@@ -82,11 +83,15 @@ RULE 5 — WATER FIXTURES (count exactly as shown in floor plan):
 - fix_pot_filler: Every pot filler symbol
 - fix_kitchen_patio: Outdoor kitchen water connection / patio kitchen sink
 - fix_hose_bib: Exterior hose bib / sillcock (HB symbol on exterior walls or laundry area) — count each one shown
+- fix_dishwasher: Kitchen dishwasher — mark if DW symbol or "DISHWASHER" label is present in kitchen; count each unit shown
+- fix_water_softener: Mark ONLY if a water softener / conditioner symbol or label (WS, SOFTENER, CONDITIONER) is explicitly shown
+- fix_purifier: Mark ONLY if a water purifier, filter, or RO system symbol or label (RO, FILTER, PURIFIER) is explicitly shown
+- fix_shower_liner: Mark ONLY if the plan explicitly notes a shower liner replacement or shower pan liner installation
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 6 — ADD-ONS (set service_id to null):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Dishwashers, garbage disposals, water softeners, irrigation, and anything else not in the approved lists above → service_id: null. They become add-ons. (Hose bibs are now mapped to fix_hose_bib — do NOT send them as add-ons.)
+Garbage disposals, irrigation systems, and anything else not in the approved lists above → service_id: null. They become add-ons. (Hose bibs → fix_hose_bib; dishwashers → fix_dishwasher; water softeners → fix_water_softener; purifiers → fix_purifier — do NOT send these as add-ons.)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 7 — MULTI-UNIT:
