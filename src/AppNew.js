@@ -35,7 +35,14 @@ const SERVICES = [
   { id: 'wh_replacement',  name: 'Water Heater Replacement',      unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'manablok',        name: 'Manablok System',               unit: 950 },
   { id: 'repiping',        name: 'Repiping',                      unit: 1500, startUnit: 0, finishUnit: 0 },
-  { id: 'cut_bust',        name: 'Cut and Bust Concrete',         unit: 200 },
+  { id: 'cut_bust',          name: 'Cut and Bust Concrete',             unit: 200 },
+  { id: 'pressure_reg',      name: 'Pressure Regulator Installation',  unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'expansion_tank',    name: 'Expansion Tank Installation',      unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'shutoff_valve',     name: 'Shut-off Valve Replacement',       unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'garbage_disposal',  name: 'Garbage Disposal Installation',    unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'sump_pump',         name: 'Sump Pump Installation',           unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'backflow',          name: 'Backflow Preventer',               unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'irrigation_hookup', name: 'Irrigation System Hookup',         unit: 0, startUnit: 0, finishUnit: 0 },
   // Water Fixtures
   { id: 'fix_toilet',          name: 'Toilet',                         unit: 0 },
   { id: 'fix_faucet',          name: 'Faucet',                         unit: 0 },
@@ -69,12 +76,12 @@ const SERVICE_GROUPS = [
   { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin'] },
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
-  { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust'] },
+  { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup'] },
   { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner'] },
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
@@ -2310,7 +2317,9 @@ export default function AppNew(){
                     // Water Heater / Tankless WH / Recirc Pump / Repiping / Installation services — 3 billing modes
                     if (s.id === 'water_heater' || s.id === 'tankless_wh' || s.id === 'recirc_pump' || s.id === 'repiping'
                         || s.id === 'fix_gas_range' || s.id === 'fix_gas_bbq'
-                        || s.id === 'fix_dishwasher' || s.id === 'fix_water_softener' || s.id === 'fix_purifier' || s.id === 'fix_shower_liner') {
+                        || s.id === 'fix_dishwasher' || s.id === 'fix_water_softener' || s.id === 'fix_purifier' || s.id === 'fix_shower_liner'
+                        || s.id === 'pressure_reg' || s.id === 'expansion_tank' || s.id === 'shutoff_valve' || s.id === 'garbage_disposal'
+                        || s.id === 'sump_pump' || s.id === 'backflow' || s.id === 'irrigation_hookup') {
                       const sMode = s.billingMode
                       const sTotal = s.enabled
                         ? sMode === 'ind_2pay' ? (s.startUnit||0)+(s.finishUnit||0) : (s.qty||0)*(s.unit||0)
@@ -3993,7 +4002,7 @@ function HelpPanel({ onClose }) {
         'Services are organized into six groups: Sewer, Water, Gas, Others, Water Fixtures, and Gas Fixtures.',
         '% Based: the service amount is added into the base total and split across your phase schedule (e.g. 30% Underground / 50% Rough-In / 20% Trim). It shows as "in base" on the invoice.',
         'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
-        'Services with billing mode toggles (New Construction only): Water Line Meter, Manablok, Gas System Indoor, Hose Bib, Gas Furnace, Gas Water Heater, Gas Dryer, Gas Stove, Gas Generator, and Gas Kitchen Patio have a 2-mode toggle (% Based / Independent). Water Heater, Tankless WH, Recirculation Pump, Water Heater Replacement, Repiping, Gas Range Installation, Gas Patio BBQ / Grill Installation, Dishwasher Installation, Water Softener Installation, Purifier Installation, and Shower Liner Installation have a 3-mode toggle (% Based / Fixed / 2-Payment).',
+        'Services with billing mode toggles (New Construction only): Water Line Meter, Manablok, Gas System Indoor, Hose Bib, Gas Furnace, Gas Water Heater, Gas Dryer, Gas Stove, Gas Generator, and Gas Kitchen Patio have a 2-mode toggle (% Based / Independent). Water Heater, Tankless WH, Recirculation Pump, Water Heater Replacement, Repiping, Gas Range Installation, Gas Patio BBQ / Grill Installation, Dishwasher Installation, Water Softener Installation, Purifier Installation, Shower Liner Installation, Pressure Regulator Installation, Expansion Tank Installation, Shut-off Valve Replacement, Garbage Disposal Installation, Sump Pump Installation, Backflow Preventer, and Irrigation System Hookup have a 3-mode toggle (% Based / Fixed / 2-Payment).',
         'THREE-MODE SERVICES — (1) % Based — qty × unit enters the base and splits across the phase schedule, shows "(in base)". (2) Fixed — qty × unit billed as an independent line item outside the phase split. (3) 2-Payment — separate "Start" and "Completion" flat dollar fields; both appear as individual line items on the PDF, neither enters the phase calculation.',
         'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture. Installation services in the Water Fixtures section (Dishwasher, Water Softener, Purifier, Shower Liner) use the 3-mode billing toggle instead of shared pricing.',
         'GAS FIXTURES — billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a price for standard gas fixtures (Furnace, Gas WH, Dryer, Stove, Generator, Outdoor Kitchen). Gas Range Installation and Gas Patio BBQ / Grill Installation use the 3-mode toggle (% Based / Fixed / 2-Payment) instead of the simple dual toggle.',
@@ -4300,7 +4309,7 @@ function HelpPanel({ onClose }) {
     { icon:'✍️', title:'Digital Signature Link', desc:'Click Signature in the toolbar to generate a one-time link. Text it to your client — they sign on their phone with no account or app required. The signature is saved and prints at the bottom of every PDF for that document.' },
     { icon:'⚙️', title:'Service Groups — Sewer / Water / Gas / Others / Fixtures', desc:'All services are organized into 6 trade groups. For New Construction, base services have a % Based / Independent toggle — % Based splits the amount across your phase schedule; Independent bills it as a separate line item on whichever invoice you choose.' },
     { icon:'📐', title:'Analyze Blueprint — AI Fixture Detection', desc:'Upload a floor plan PDF or image and Claude AI detects water and gas fixtures automatically. Houses and Fixtures/House are filled in — just enter Price/Fixture and Price/Gas Fixture to calculate the full base total instantly.' },
-    { icon:'🔧', title:'New Installation Services', desc:'Added Gas Range Installation, Gas Patio BBQ / Grill Installation (renamed), Dishwasher Installation, Water Softener Installation, Purifier Installation, and Shower Liner Installation. All six support the full 3-mode billing toggle: % Based (rolls into base), Fixed (independent line item), and 2-Payment (Start + Completion split). Blueprint analysis now detects dishwashers, water softeners, and purifiers automatically.' },
+    { icon:'🔧', title:'New Services — Others, Water & Gas Fixtures', desc:'Added 13 new services with 3-mode billing (% Based / Fixed / 2-Payment): Pressure Regulator Installation, Expansion Tank Installation, Shut-off Valve Replacement, Garbage Disposal Installation, Sump Pump Installation, Backflow Preventer, Irrigation System Hookup (Others section); Dishwasher Installation, Water Softener Installation, Purifier Installation, Shower Liner Installation (Water Fixtures); Gas Range Installation, Gas Patio BBQ / Grill Installation (Gas Fixtures). Blueprint analysis now detects dishwashers, water softeners, and purifiers.' },
     { icon:'🔥', title:'Gas Fixtures — % Based or Independent Billing', desc:'Standard gas fixtures (Furnace, Gas Water Heater, Dryer, Stove, Generator, Outdoor Kitchen) use the 2-mode toggle. Use "Price / Gas Fixture" to batch-set a shared price. Gas Range Installation and Gas BBQ Installation now use the full 3-mode toggle (% Based / Fixed / 2-Payment) for finer billing control.' },
   ]
 
