@@ -750,7 +750,16 @@ export default function AppNew(){
         if (error) {
           console.error('Supabase auth session error:', error)
         }
-        setUser(data?.session?.user ?? null)
+        const u = data?.session?.user ?? null
+        setUser(u)
+        if (!u) {
+          // Special-purpose tokens (?sign=, ?join=, ?options=, ?payment=success) bypass redirect
+          const params = new URLSearchParams(window.location.search)
+          const hasToken = params.has('sign') || params.has('options') || params.has('join') || params.get('payment') === 'success'
+          if (window.location.pathname !== '/login' && !hasToken) {
+            window.location.replace('/landing')
+          }
+        }
       } catch (e) {
         console.error('Error getting auth session', e)
       } finally {
@@ -761,7 +770,11 @@ export default function AppNew(){
 
     initAuth()
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(u)
+      if (u && window.location.pathname === '/login') {
+        window.history.replaceState({}, '', '/')
+      }
     })
     return () => {
       if (authListener?.subscription?.unsubscribe) {
@@ -1619,6 +1632,7 @@ export default function AppNew(){
   }
 
   if (!user) {
+    if (window.location.pathname !== '/login') return null
     return (
       <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20, display:'flex', alignItems:'center', justifyContent:'center' }}>
         <div style={{ width:360, padding:24, background:'#071827', borderRadius:12, boxShadow:'0 10px 40px rgba(0,0,0,0.4)' }}>
