@@ -59,6 +59,8 @@ RULE 3 — GAS FIXTURES (only mark if clearly shown in the floor plan):
 - fix_gas_bbq: Mark ONLY if outdoor BBQ / grill stub or label is shown on plan
 - fix_gas_generator: Mark ONLY if generator symbol or label is visible
 - fix_gas_kitchen_patio: Mark ONLY if outdoor kitchen gas stub is explicitly shown
+- fix_gas_furnace_repl: Mark ONLY if the plan or work order explicitly notes furnace REPLACEMENT (e.g. "REPLACE FURNACE", "FURNACE REPL") — do NOT mark if fix_gas_furnace already applies
+- fix_gas_wh_repl: Mark ONLY if the plan or work order explicitly notes gas water heater REPLACEMENT (e.g. "REPLACE GAS WH", "GAS WH REPL") — do NOT mark if fix_gas_wh already applies
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 4 — QUANTITY RULES FOR WATER HEATER & LAUNDRY (based on bathroom count):
@@ -87,11 +89,20 @@ RULE 5 — WATER FIXTURES (count exactly as shown in floor plan):
 - fix_water_softener: Mark ONLY if a water softener / conditioner symbol or label (WS, SOFTENER, CONDITIONER) is explicitly shown
 - fix_purifier: Mark ONLY if a water purifier, filter, or RO system symbol or label (RO, FILTER, PURIFIER) is explicitly shown
 - fix_shower_liner: Mark ONLY if the plan explicitly notes a shower liner replacement or shower pan liner installation
+- fix_shower_valve: Mark ONLY if the plan or work order explicitly notes a shower valve replacement
+- fix_tub_valve: Mark ONLY if the plan or work order explicitly notes a tub valve replacement
+- fix_ro_filter: Mark ONLY if a reverse osmosis (RO) system or under-sink filter is explicitly shown or labeled
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RULE 5b — SEWER SERVICE ITEMS (only from service work orders, not floor plans):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- sewer_clogged: Mark ONLY if the document explicitly states "clogged sewer", "drain cleaning", or similar service work — never from a standard floor plan
+- toilet_clogged: Mark ONLY if the document explicitly states "clogged toilet" or toilet service — never from a standard floor plan
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 6 — ADD-ONS (set service_id to null):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Garbage disposals, irrigation systems, and anything else not in the approved lists above → service_id: null. They become add-ons. (Hose bibs → fix_hose_bib; dishwashers → fix_dishwasher; water softeners → fix_water_softener; purifiers → fix_purifier — do NOT send these as add-ons.)
+Garbage disposals, irrigation systems, and anything else not in the approved lists above → service_id: null. They become add-ons. (Hose bibs → fix_hose_bib; dishwashers → fix_dishwasher; water softeners → fix_water_softener; purifiers/RO → fix_ro_filter; shower valve replacement → fix_shower_valve; tub valve replacement → fix_tub_valve — do NOT send these as add-ons.)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RULE 7 — MULTI-UNIT:

@@ -19,7 +19,9 @@ const SERVICES = [
   { id: 'sewer_tap',    name: 'Sewer Tap',                     unit: 0, desc: '' },
   { id: 'storm',        name: 'Storm Drain',                   unit: 700 },
   { id: 'grease',       name: 'Grease Trap',                   unit: 450 },
-  { id: 'catch_basin',  name: 'Catch Basin',                   unit: 0 },
+  { id: 'catch_basin',    name: 'Catch Basin',                   unit: 0 },
+  { id: 'sewer_clogged',  name: 'Clogged Sewer Line',            unit: 0 },
+  { id: 'toilet_clogged', name: 'Clogged Toilet',                unit: 0 },
   // Water
   { id: 'water',        name: 'Water Line Meter',              unit: 800 },
   { id: 'water_tap',    name: 'Water Meter Tap',               unit: 0, desc: '' },
@@ -61,6 +63,9 @@ const SERVICES = [
   { id: 'fix_water_softener',  name: 'Water Softener Installation',     unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'fix_purifier',        name: 'Purifier Installation',           unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'fix_shower_liner',    name: 'Shower Liner Installation',       unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'fix_shower_valve',    name: 'Shower Valve Replacement',        unit: 0 },
+  { id: 'fix_tub_valve',       name: 'Tub Valve Replacement',           unit: 0 },
+  { id: 'fix_ro_filter',       name: 'Reverse Osmosis Filter Installation', unit: 0 },
   // Gas Fixtures
   { id: 'fix_gas_furnace',     name: 'Gas Furnace',                    unit: 0 },
   { id: 'fix_gas_wh',          name: 'Gas Water Heater',               unit: 0 },
@@ -70,15 +75,17 @@ const SERVICES = [
   { id: 'fix_gas_generator',   name: 'Gas Line Generator',             unit: 0 },
   { id: 'fix_gas_kitchen_patio', name: 'Gas Kitchen Patio (Outdoor)',  unit: 0 },
   { id: 'fix_gas_range',         name: 'Gas Range Installation',       unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'fix_gas_furnace_repl',  name: 'Gas Furnace Replacement',      unit: 0 },
+  { id: 'fix_gas_wh_repl',       name: 'Gas Water Heater Replacement', unit: 0 },
 ]
 
 const SERVICE_GROUPS = [
-  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin'] },
+  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin', 'sewer_clogged', 'toilet_clogged'] },
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup'] },
-  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner'] },
-  { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range'] },
+  { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'fix_shower_valve', 'fix_tub_valve', 'fix_ro_filter'] },
+  { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_gas_furnace_repl', 'fix_gas_wh_repl'] },
 ]
 
 const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup']
@@ -4082,11 +4089,11 @@ function HelpPanel({ onClose, userEmail = '' }) {
         'Independent: the service is billed as its own line item outside the phase split — you collect the full amount on whatever invoice you include it on.',
         'Services with billing mode toggles (New Construction only): Water Line Meter, Manablok, Gas System Indoor, Hose Bib, Gas Furnace, Gas Water Heater, Gas Dryer, Gas Stove, Gas Generator, and Gas Kitchen Patio have a 2-mode toggle (% Based / Independent). Water Heater, Tankless WH, Recirculation Pump, Water Heater Replacement, Repiping, Gas Range Installation, Gas Patio BBQ / Grill Installation, Dishwasher Installation, Water Softener Installation, Purifier Installation, Shower Liner Installation, Pressure Regulator Installation, Expansion Tank Installation, Shut-off Valve Replacement, Garbage Disposal Installation, Sump Pump Installation, Backflow Preventer, and Irrigation System Hookup have a 3-mode toggle (% Based / Fixed / 2-Payment).',
         'THREE-MODE SERVICES — (1) % Based — qty × unit enters the base and splits across the phase schedule, shows "(in base)". (2) Fixed — qty × unit billed as an independent line item outside the phase split. (3) 2-Payment — separate "Start" and "Completion" flat dollar fields; both appear as individual line items on the PDF, neither enters the phase calculation.',
-        'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture. Installation services in the Water Fixtures section (Dishwasher, Water Softener, Purifier, Shower Liner) use the 3-mode billing toggle instead of shared pricing.',
-        'GAS FIXTURES — billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a price for standard gas fixtures (Furnace, Gas WH, Dryer, Stove, Generator, Outdoor Kitchen). Gas Range Installation and Gas Patio BBQ / Grill Installation use the 3-mode toggle (% Based / Fixed / 2-Payment) instead of the simple dual toggle.',
+        'WATER FIXTURES — shared pricing: Use the "Price / Fixture" input at the top of the Water Fixtures section to set one price that applies to every water fixture at once. All water fixture amounts enter the base total through Houses × Fixtures/House × Price/Fixture. Installation/replacement services in the Water Fixtures section (Dishwasher, Water Softener, Purifier, Shower Liner) use the 3-mode billing toggle. Shower Valve Replacement, Tub Valve Replacement, and Reverse Osmosis Filter Installation are always-independent (Fixed only — no mode toggle).',
+        'GAS FIXTURES — billing: Use "Price / Gas Fixture" in the Gas Fixtures section header to batch-set a price for standard gas fixtures (Furnace, Gas WH, Dryer, Stove, Generator, Outdoor Kitchen, Gas Furnace Replacement, Gas WH Replacement). Gas Range Installation and Gas Patio BBQ / Grill Installation use the 3-mode toggle (% Based / Fixed / 2-Payment). Gas Furnace Replacement and Gas Water Heater Replacement are always-independent (Fixed only).',
         'HOSE BIB — dual billing: Toggle % Based to include it in the base total, or Independent to bill it as a separate line item.',
         'WATER HEATER REPLACEMENT & REPIPING — three billing modes: (1) % Based — enters base → phase split. (2) Fixed — independent line item. (3) 2-Payment — Start + Completion as separate line items.',
-        'Always-Independent (no toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, and Cut & Bust.',
+        'Always-Independent (Fixed only, no mode toggle): Sewer, Storm Drain, Grease Trap, Sewer Tap, Water Meter Tap, Gas Riser, Underground Gas Line, Temp Gas, Cut & Bust, Clogged Sewer Line, Clogged Toilet, Shower Valve Replacement, Tub Valve Replacement, Reverse Osmosis Filter Installation, Gas Furnace Replacement, and Gas Water Heater Replacement.',
         'Water Heater Replacement has Garage and Attic sub-rows — enter qty and unit price for each location separately.',
         'Sewer Tap and Water Meter Tap show a description field — enter depth or distance instead of a quantity.',
         'Enable a service by checking its checkbox. The amount is added to the document total immediately.',
@@ -4101,7 +4108,7 @@ function HelpPanel({ onClose, userEmail = '' }) {
       steps: [
         'Click 📐 Analyze Blueprint on the quote form (New Construction mode recommended).',
         'Upload a PDF architectural floor plan or a photo/scan of the plan (JPG, PNG, PDF supported).',
-        'Claude AI analyzes the plan and detects: toilets, showers, tubs, sinks, laundry, pot fillers, hose bibs, dishwashers, water softeners, purifiers, outdoor water connections, gas furnaces, gas water heaters, gas dryers, gas stoves/ranges, gas BBQs, generators, and outdoor gas connections.',
+        'Claude AI analyzes the plan and detects: toilets, showers, tubs, sinks, laundry, pot fillers, hose bibs, dishwashers, water softeners, RO filters, shower/tub valve replacements, outdoor water connections, gas furnaces, gas water heaters, gas dryers, gas stoves/ranges, gas BBQs, generators, furnace/WH replacements, and outdoor gas connections. Clogged Sewer Line and Clogged Toilet are detected only from service work orders.',
         'Review detected items — you can adjust quantities or uncheck any item before applying.',
         'Click Apply to Quote — all checked fixtures are added with correct quantities. Houses and Fixtures/House fields are filled automatically.',
         'Prices stay at $0 after blueprint apply. Enter "Price / Fixture" to calculate water fixtures, and "Price / Gas Fixture" for gas fixtures. The Base, phase breakdown, and total all update in real time as you type.',
