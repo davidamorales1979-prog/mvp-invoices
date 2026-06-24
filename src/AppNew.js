@@ -1115,7 +1115,7 @@ export default function AppNew(){
               payLink = plData.url
               const withLink = [{ ts: new Date().toISOString(), entry: 'payment_link_created', status: 'draft', docNumber, url: payLink }, ...newHistory]
               setHistory(withLink)
-              persistDocument({ history: withLink })
+              persistDocument({ doc_type: 'invoice', history: withLink })
               setPaymentLinkUrl(payLink)
             }
           } catch (e) { console.error('auto payment link on convert:', e) }
@@ -1147,6 +1147,7 @@ export default function AppNew(){
         }
       }
     }
+    fetchSavedDocs()
   }
   function printDoc(){ pushHistory('printed'); window.print() }
   async function newNumber(){
