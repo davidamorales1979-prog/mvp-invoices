@@ -145,7 +145,7 @@ export default function AppNew(){
   const [contractor, setContractor] = useState('MVP Solutions')
   const [showLogo, setShowLogo] = useState(true)
   const [docType, setDocType] = useState('quote')
-  const docTypeRef = useRef('quote')
+  const docTypeRef = useRef('quote') // eslint-disable-line
   const docNumber = formatDocNumber(counter.raw, docType)
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -207,7 +207,7 @@ export default function AppNew(){
   const [photoMessage, setPhotoMessage] = useState('')
   const [scheduleDate, setScheduleDate] = useState('')
   const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
-  const [allScheduledDocs, setAllScheduledDocs] = useState([])
+  const [, setAllScheduledDocs] = useState([])
   const [subscription, setSubscription] = useState(null)
   const [subLoading, setSubLoading] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
