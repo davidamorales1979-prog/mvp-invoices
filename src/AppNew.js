@@ -1099,8 +1099,8 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      counter.bump()
       setDocType('invoice')
+      docTypeRef.current = 'invoice'
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
       setHistory(newHistory)
