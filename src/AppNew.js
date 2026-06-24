@@ -1899,7 +1899,7 @@ export default function AppNew(){
             />
           )}
           {activeView === 'schedule' && (
-            <ScheduleCalendar docs={savedDocs.filter(d => d.scheduled_date)} onClose={() => setActiveView(null)} />
+            <ScheduleCalendar user={user} accountId={accountId} isAdmin={isAdmin} onClose={() => setActiveView(null)} />
           )}
           {activeView === 'clients' && (
             <ClientsPanel
@@ -4596,11 +4596,31 @@ function ClientsPanel({ docs, onOpen, onClose }) {
   )
 }
 
-function ScheduleCalendar({ docs, onClose }) {
+function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState(null)
+  const [docs, setDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchDocs() {
+      if (!user || !accountId) { setLoading(false); return }
+      const col = isAdmin ? 'user_id' : 'created_by'
+      const val = isAdmin ? accountId : user.id
+      const { data, error } = await supabase
+        .from('documents')
+        .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
+        .eq(col, val)
+        .not('scheduled_date', 'is', null)
+        .order('scheduled_date', { ascending: true })
+      if (error) console.error('ScheduleCalendar fetch error:', error)
+      setDocs(data || [])
+      setLoading(false)
+    }
+    fetchDocs()
+  }, [user, accountId, isAdmin])
 
   const firstDow = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -4628,7 +4648,7 @@ function ScheduleCalendar({ docs, onClose }) {
   return (
     <div style={{ marginTop:20, background:'#041827', borderRadius:10, padding:16 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
-        <h4 style={{ color:GOLD, margin:0 }}>Schedule</h4>
+        <h4 style={{ color:GOLD, margin:0 }}>Schedule{loading ? <span style={{ color:'#7f98b0', fontSize:12, fontWeight:400, marginLeft:10 }}>Loading…</span> : null}</h4>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <button onClick={prevMonth} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:'4px 12px', borderRadius:6, cursor:'pointer', fontSize:16 }}>‹</button>
           <span style={{ color:GOLD, fontWeight:700, fontSize:15, minWidth:160, textAlign:'center' }}>{monthLabel}</span>
