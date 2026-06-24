@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import './App.css'
 import { supabase } from './supabase'
 
@@ -145,6 +145,7 @@ export default function AppNew(){
   const [contractor, setContractor] = useState('MVP Solutions')
   const [showLogo, setShowLogo] = useState(true)
   const [docType, setDocType] = useState('quote')
+  const docTypeRef = useRef('quote')
   const docNumber = formatDocNumber(counter.raw, docType)
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -1009,13 +1010,15 @@ export default function AppNew(){
     init()
   }, [reset, fetchSavedDocs, user, accountId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { docTypeRef.current = docType }, [docType])
+
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
     const payload = {
       contractor,
       show_logo: showLogo,
-      doc_type: docType,
+      doc_type: docTypeRef.current,
       client,
       address,
       houses,
@@ -4606,9 +4609,10 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
 
   useEffect(() => {
     async function fetchDocs() {
-      if (!user || !accountId) { setLoading(false); return }
+      const effectiveId = accountId || user?.id
+      if (!user || !effectiveId) { setLoading(false); return }
       const col = isAdmin ? 'user_id' : 'created_by'
-      const val = isAdmin ? accountId : user.id
+      const val = isAdmin ? effectiveId : user.id
       const { data, error } = await supabase
         .from('documents')
         .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
@@ -4676,7 +4680,14 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
               border: isSelected ? `1px solid ${GOLD}` : isToday ? '1px solid #1a4060' : '1px solid #0d1e2e',
               borderRadius:6, padding:'4px 6px', cursor:'pointer'
             }}>
-              <div style={{ fontSize:11, color: isToday ? GOLD : '#9fb0c6', fontWeight: isToday ? 700 : 400, marginBottom:3 }}>{day}</div>
+              <div style={{ fontSize:11, color: isToday ? GOLD : '#9fb0c6', fontWeight: isToday ? 700 : 400, marginBottom:2 }}>{day}</div>
+              {dayDocs.length > 0 && (
+                <div style={{ display:'flex', gap:3, marginBottom:3, flexWrap:'wrap' }}>
+                  {dayDocs.map(doc => (
+                    <div key={doc.id} style={{ width:6, height:6, borderRadius:'50%', background: doc.doc_type==='invoice' ? '#7ab3e0' : GOLD, flexShrink:0 }} />
+                  ))}
+                </div>
+              )}
               {dayDocs.slice(0,3).map(doc => (
                 <div key={doc.id} style={{
                   fontSize:10, padding:'2px 4px', borderRadius:3, marginBottom:2,
