@@ -1015,6 +1015,7 @@ export default function AppNew(){
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
+    console.log('[Save] doc_type:', docTypeRef.current, '| scheduled_date:', scheduleDate || null)
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -4619,7 +4620,12 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
         .eq(col, val)
         .not('scheduled_date', 'is', null)
         .order('scheduled_date', { ascending: true })
-      if (error) console.error('ScheduleCalendar fetch error:', error)
+      if (error) {
+        console.error('[Calendar] Fetch error:', error)
+      } else {
+        console.log('[Calendar] Total docs with scheduled_date:', (data||[]).length)
+        ;(data||[]).forEach(d => console.log('[Calendar]', d.doc_number, d.scheduled_date, d.doc_type))
+      }
       setDocs(data || [])
       setLoading(false)
     }
