@@ -1899,7 +1899,7 @@ export default function AppNew(){
             />
           )}
           {activeView === 'schedule' && (
-            <ScheduleCalendar docs={allScheduledDocs} onClose={() => setActiveView(null)} />
+            <ScheduleCalendar docs={savedDocs.filter(d => d.scheduled_date)} onClose={() => setActiveView(null)} />
           )}
           {activeView === 'clients' && (
             <ClientsPanel
