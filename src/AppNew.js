@@ -3843,7 +3843,7 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId, us
   const invoicesThisMonth = thisMonth.filter(d => d.doc_type === 'invoice').length
   const billedThisMonth   = thisMonth.filter(d => d.doc_type === 'invoice').reduce((s, d) => s + (Number(d.total) || 0), 0)
   const paidThisMonth     = thisMonth.filter(d => d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
-  const totalPending      = docs.filter(d => d.status !== 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
+  const totalPending      = docs.filter(d => d.doc_type === 'invoice' && d.status !== 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
 
   // Build last-6-months buckets
   const months = Array.from({ length: 6 }, (_, i) => {
@@ -4024,8 +4024,8 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId, us
           const mine = filtered.filter(d => d.contractor === name)
           const quotes   = mine.filter(d => d.doc_type !== 'invoice').length
           const invoices = mine.filter(d => d.doc_type === 'invoice').length
-          const billed   = mine.reduce((s, d) => s + (Number(d.total) || 0), 0)
-          const paid     = mine.filter(d => d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
+          const billed   = mine.filter(d => d.doc_type === 'invoice').reduce((s, d) => s + (Number(d.total) || 0), 0)
+          const paid     = mine.filter(d => d.doc_type === 'invoice' && d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
           const pending  = billed - paid
           return { name, quotes, invoices, billed, paid, pending }
         })
