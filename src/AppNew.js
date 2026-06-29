@@ -1023,7 +1023,6 @@ export default function AppNew(){
     // so the invoice INSERT goes through the exact same auth/RLS path as any other save.
     const { _forceInsert, ...payloadOverrides } = overrides
 
-    console.log('[Save] scheduled_date being saved:', scheduleDateRef.current || null, '| doc_type:', docTypeRef.current, '| savedDocId:', savedDocId, '| _forceInsert:', !!_forceInsert)
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -1108,9 +1107,7 @@ export default function AppNew(){
   async function convertToInvoice(){
     if (docType !== 'invoice'){
       // ── Step 1: guarantee the quote row exists ────────────────────────────
-      console.log('[Convert] step 1 — saving quote. savedDocId=', savedDocId, 'docType=', docType)
       const quoteId = await persistDocument({ doc_type: 'quote' })
-      console.log('[Convert] step 1 done — quoteId=', quoteId)
       if (!quoteId) { setSaveMessage('Convert failed: could not save quote'); return }
 
       // ── Step 2: get next counter from Supabase ────────────────────────────
@@ -1125,15 +1122,12 @@ export default function AppNew(){
         }
       } catch (_) {}
       const newDocNumber = formatDocNumber(newRaw, 'invoice')
-      console.log('[Convert] step 2 — newRaw=', newRaw, 'newDocNumber=', newDocNumber)
-
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
 
       // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────
       // _forceInsert bypasses the savedDocId → UPDATE branch so this always
       // creates a new row using the exact same auth/RLS path as saving a quote.
-      console.log('[Convert] step 3 — inserting invoice via persistDocument(_forceInsert)...')
       docTypeRef.current = 'invoice'   // set ref before persistDocument reads it
       const newId = await persistDocument({
         _forceInsert: true,
@@ -1142,7 +1136,6 @@ export default function AppNew(){
         raw_counter: newRaw,
         history: newHistory,
       })
-      console.log('[Convert] step 3 done — newId=', newId)
       if (!newId) { setSaveMessage('Convert failed: could not create invoice'); return }
 
       // ── Step 4: update UI to point at new invoice ─────────────────────────
@@ -1151,7 +1144,6 @@ export default function AppNew(){
       setHistory(newHistory)
       counter.reset(newRaw)
       setSaveMessage('Invoice created')
-      console.log('[Convert] step 4 — UI updated. quoteId=', quoteId, 'newInvoiceId=', newId)
 
       if (clientEmail) {
         let payLink = null
@@ -1192,9 +1184,7 @@ export default function AppNew(){
       }
 
       // ── Step 5: refresh table — await so both rows are visible ────────────
-      console.log('[Convert] step 5 — refreshing saved docs...')
       await fetchSavedDocs()
-      console.log('[Convert] done')
     }
   }
   function printDoc(){ pushHistory('printed'); window.print() }
@@ -4665,7 +4655,6 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
         .not('scheduled_date', 'is', null)
         .order('scheduled_date', { ascending: true })
       if (error) console.error('[Calendar] Fetch error:', error)
-      console.log('[Calendar] docs returned:', data?.length ?? 0, data?.map(d => ({ doc_number: d.doc_number, scheduled_date: d.scheduled_date })))
       setDocs(data || [])
       setLoading(false)
     }
