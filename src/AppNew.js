@@ -206,6 +206,7 @@ export default function AppNew(){
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
   const [scheduleDate, setScheduleDate] = useState('')
+  const scheduleDateRef = useRef('')
   const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
   const [, setAllScheduledDocs] = useState([])
   const [subscription, setSubscription] = useState(null)
@@ -1013,11 +1014,16 @@ export default function AppNew(){
   }, [reset, fetchSavedDocs, user, accountId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { docTypeRef.current = docType }, [docType])
+  useEffect(() => { scheduleDateRef.current = scheduleDate }, [scheduleDate])
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
-    console.log('[Save] scheduled_date being saved:', scheduleDate || null, '| doc_type:', docTypeRef.current, '| savedDocId:', savedDocId)
+    // _forceInsert lets convertToInvoice create a new row even when savedDocId is set,
+    // so the invoice INSERT goes through the exact same auth/RLS path as any other save.
+    const { _forceInsert, ...payloadOverrides } = overrides
+
+    console.log('[Save] scheduled_date being saved:', scheduleDateRef.current || null, '| doc_type:', docTypeRef.current, '| savedDocId:', savedDocId, '| _forceInsert:', !!_forceInsert)
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -1047,7 +1053,7 @@ export default function AppNew(){
       created_by: user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
-      scheduled_date: scheduleDate || null,
+      scheduled_date: scheduleDateRef.current || null,
       signature_token: signatureToken,
       signature_data: signatureData,
       signed_at: signedAt,
@@ -1057,11 +1063,11 @@ export default function AppNew(){
       quote_options: quoteOptions || null,
       selected_option_idx: selectedOptionIdx ?? null,
       options_token: optionsToken || null,
-      ...overrides
+      ...payloadOverrides
     }
 
     try {
-      if (savedDocId) {
+      if (savedDocId && !_forceInsert) {
         const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', accountId || user.id)
         if (error) {
           console.error('Supabase update error:', error)
@@ -1124,59 +1130,24 @@ export default function AppNew(){
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
 
-      // ── Step 3: INSERT brand-new invoice row (quote row untouched) ─────────
-      console.log('[Convert] step 3 — inserting invoice row...')
-      const invoicePayload = {
-        contractor,
-        show_logo: showLogo,
+      // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────
+      // _forceInsert bypasses the savedDocId → UPDATE branch so this always
+      // creates a new row using the exact same auth/RLS path as saving a quote.
+      console.log('[Convert] step 3 — inserting invoice via persistDocument(_forceInsert)...')
+      docTypeRef.current = 'invoice'   // set ref before persistDocument reads it
+      const newId = await persistDocument({
+        _forceInsert: true,
         doc_type: 'invoice',
-        client,
-        address,
-        houses,
-        fixtures_per_house: fixturesPerHouse,
-        price_per_fixture: pricePerFixture,
-        fixture_type: fixtureType,
-        project_type: projectType,
-        include_underground: includeUnderground,
-        include_rough: includeRough,
-        include_trim: includeTrim,
-        service_start_percent: serviceStartPercent,
-        service_completion_percent: serviceCompletionPercent,
-        underground_pct: undergroundPct,
-        rough_pct: roughPct,
-        trim_pct: trimPct,
-        services,
-        addons,
-        notes,
-        history: newHistory,
-        status,
-        total: displayTotal,
-        user_id: accountId || user.id,
-        created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        scheduled_date: scheduleDate || null,
-        signature_token: signatureToken,
-        signature_data: signatureData,
-        signed_at: signedAt,
-        signer_name: signerName || null,
-        client_email: clientEmail || null,
-        client_phone: clientPhone || null,
-        quote_options: quoteOptions || null,
-        selected_option_idx: selectedOptionIdx ?? null,
-        options_token: optionsToken || null,
-      }
-
-      const { data: insertData, error: insertError } = await supabase
-        .from('documents').insert([invoicePayload]).select('id').single()
-      console.log('[Convert] step 3 done — insertData=', insertData, 'insertError=', insertError)
-      if (insertError) { setSaveMessage(`Convert failed: ${insertError.message}`); return }
+        history: newHistory,
+      })
+      console.log('[Convert] step 3 done — newId=', newId)
+      if (!newId) { setSaveMessage('Convert failed: could not create invoice'); return }
 
       // ── Step 4: update UI to point at new invoice ─────────────────────────
-      const newId = insertData.id
-      setSavedDocId(newId)
+      // setSavedDocId was already called inside persistDocument (_forceInsert).
       setDocType('invoice')
-      docTypeRef.current = 'invoice'
       setHistory(newHistory)
       counter.reset(newRaw)
       setSaveMessage('Invoice created')
@@ -2288,7 +2259,7 @@ export default function AppNew(){
           </div>
           <div className='no-print'>
             <label style={{ color:'#9fb0c6' }}>Schedule Date</label>
-            <input type='date' value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
+            <input type='date' value={scheduleDate} onChange={e=>{ setScheduleDate(e.target.value); scheduleDateRef.current = e.target.value }} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
         </div>
 
