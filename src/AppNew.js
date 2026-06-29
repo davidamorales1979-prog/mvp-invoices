@@ -205,7 +205,8 @@ export default function AppNew(){
   const [photoUploading, setPhotoUploading] = useState(false)
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
-  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [scheduleDate, setScheduleDate] = useState('')
+  const scheduleDateRef = useRef('')
   const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
   const [, setAllScheduledDocs] = useState([])
   const [subscription, setSubscription] = useState(null)
@@ -1013,9 +1014,14 @@ export default function AppNew(){
   }, [reset, fetchSavedDocs, user, accountId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { docTypeRef.current = docType }, [docType])
+  useEffect(() => { scheduleDateRef.current = scheduleDate }, [scheduleDate])
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
+
+    // _forceInsert lets convertToInvoice create a new row even when savedDocId is set,
+    // so the invoice INSERT goes through the exact same auth/RLS path as any other save.
+    const { _forceInsert, ...payloadOverrides } = overrides
 
     const payload = {
       contractor,
@@ -1046,7 +1052,7 @@ export default function AppNew(){
       created_by: user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
-      scheduled_date: scheduledDateValue,
+      scheduled_date: scheduleDateRef.current || null,
       signature_token: signatureToken,
       signature_data: signatureData,
       signed_at: signedAt,
@@ -1056,11 +1062,11 @@ export default function AppNew(){
       quote_options: quoteOptions || null,
       selected_option_idx: selectedOptionIdx ?? null,
       options_token: optionsToken || null,
-      ...overrides
+      ...payloadOverrides
     }
 
     try {
-      if (savedDocId) {
+      if (savedDocId && !_forceInsert) {
         const { error } = await supabase.from('documents').update(payload).eq('id', savedDocId).eq('user_id', accountId || user.id)
         if (error) {
           console.error('Supabase update error:', error)
@@ -1100,7 +1106,7 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      // ── Step 1: save/update the quote row first ───────────────────────────
+      // ── Step 1: guarantee the quote row exists ────────────────────────────
       const quoteId = await persistDocument({ doc_type: 'quote' })
       if (!quoteId) { setSaveMessage('Convert failed: could not save quote'); return }
 
@@ -1119,64 +1125,21 @@ export default function AppNew(){
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
 
-      // ── Step 3: INSERT a brand-new invoice row directly ───────────────────
-      // Build the payload explicitly here so there is no stale-closure risk on
-      // savedDocId — we never go through the persistDocument UPDATE branch.
-      const invoicePayload = {
-        contractor,
-        show_logo: showLogo,
+      // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────
+      // _forceInsert bypasses the savedDocId → UPDATE branch so this always
+      // creates a new row using the exact same auth/RLS path as saving a quote.
+      docTypeRef.current = 'invoice'   // set ref before persistDocument reads it
+      const newId = await persistDocument({
+        _forceInsert: true,
         doc_type: 'invoice',
-        client,
-        address,
-        houses,
-        fixtures_per_house: fixturesPerHouse,
-        price_per_fixture: pricePerFixture,
-        fixture_type: fixtureType,
-        project_type: projectType,
-        include_underground: includeUnderground,
-        include_rough: includeRough,
-        include_trim: includeTrim,
-        service_start_percent: serviceStartPercent,
-        service_completion_percent: serviceCompletionPercent,
-        underground_pct: undergroundPct,
-        rough_pct: roughPct,
-        trim_pct: trimPct,
-        services,
-        addons,
-        notes,
-        history: newHistory,
-        status,
-        total: displayTotal,
-        user_id: accountId || user.id,
-        created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        scheduled_date: scheduleDate || null,
-        signature_token: null,
-        signature_data: null,
-        signed_at: null,
-        signer_name: null,
-        client_email: clientEmail || null,
-        client_phone: clientPhone || null,
-        quote_options: null,
-        selected_option_idx: null,
-        options_token: null,
-      }
-      const { data: invData, error: invError } = await supabase
-        .from('documents')
-        .insert([invoicePayload])
-        .select('id')
-        .single()
-      if (invError) {
-        console.error('convertToInvoice insert error:', invError)
-        setSaveMessage('Convert failed: ' + invError.message)
-        return
-      }
-      const newId = invData.id
+        history: newHistory,
+      })
+      if (!newId) { setSaveMessage('Convert failed: could not create invoice'); return }
 
       // ── Step 4: update UI to point at new invoice ─────────────────────────
-      setSavedDocId(newId)
-      docTypeRef.current = 'invoice'
+      // setSavedDocId was already called inside persistDocument (_forceInsert).
       setDocType('invoice')
       setHistory(newHistory)
       counter.reset(newRaw)
@@ -2286,7 +2249,7 @@ export default function AppNew(){
           </div>
           <div className='no-print'>
             <label style={{ color:'#9fb0c6' }}>Schedule Date</label>
-            <input type='date' value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
+            <input type='date' value={scheduleDate} onChange={e=>{ setScheduleDate(e.target.value); scheduleDateRef.current = e.target.value }} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
         </div>
 
