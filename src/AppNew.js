@@ -1019,9 +1019,6 @@ export default function AppNew(){
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
-    const scheduledDateValue = scheduleDate || null
-    alert('DEBUG scheduled_date in persistDocument: ' + JSON.stringify(scheduledDateValue))
-
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -2291,7 +2288,7 @@ export default function AppNew(){
           </div>
           <div className='no-print'>
             <label style={{ color:'#9fb0c6' }}>Schedule Date</label>
-            <input type='date' value={scheduleDate} onChange={e=>{ setScheduleDate(e.target.value); scheduleDateRef.current = e.target.value }} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
+            <input type='date' value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
         </div>
 
