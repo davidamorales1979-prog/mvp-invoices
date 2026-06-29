@@ -206,7 +206,6 @@ export default function AppNew(){
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const scheduleDateRef = useRef('')
   const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
   const [, setAllScheduledDocs] = useState([])
   const [subscription, setSubscription] = useState(null)
@@ -1014,7 +1013,6 @@ export default function AppNew(){
   }, [reset, fetchSavedDocs, user, accountId, isAdmin]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { docTypeRef.current = docType }, [docType])
-  useEffect(() => { scheduleDateRef.current = scheduleDate }, [scheduleDate])
 
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
