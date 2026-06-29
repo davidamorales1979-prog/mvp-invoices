@@ -3841,7 +3841,7 @@ function DashboardPanel({ docs, alerts, onMarkPaid, onClose, user, accountId, us
   const thisMonth = docs.filter(d => d.created_at && isThisMonth(d.created_at))
   const quotesThisMonth   = thisMonth.filter(d => d.doc_type !== 'invoice').length
   const invoicesThisMonth = thisMonth.filter(d => d.doc_type === 'invoice').length
-  const billedThisMonth   = thisMonth.reduce((s, d) => s + (Number(d.total) || 0), 0)
+  const billedThisMonth   = thisMonth.filter(d => d.doc_type === 'invoice').reduce((s, d) => s + (Number(d.total) || 0), 0)
   const paidThisMonth     = thisMonth.filter(d => d.status === 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
   const totalPending      = docs.filter(d => d.status !== 'paid').reduce((s, d) => s + (Number(d.total) || 0), 0)
 
