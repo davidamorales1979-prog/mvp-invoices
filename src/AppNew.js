@@ -366,29 +366,12 @@ export default function AppNew(){
     const alerts = []
     savedDocs.forEach(doc => {
       if (!doc.scheduled_date) return
+      if (doc.doc_type !== 'invoice') return
+      if (doc.status === 'paid') return
+      if (isPhasePaid(doc, 'invoice')) return
       const sched = new Date(doc.scheduled_date + 'T00:00:00')
       const daysUntil = Math.round((sched - today) / 86400000)
-      const base = Number(doc.total) || 0
-      if (doc.project_type === 'New Construction' || !doc.project_type) {
-        ;[
-          { key:'underground', label:`${doc.underground_pct ?? 30}% Underground`, amount: base * ((doc.underground_pct ?? 30)/100), included: doc.include_underground !== false },
-          { key:'rough',       label:`${doc.rough_pct ?? 50}% Rough-In`,    amount: base * ((doc.rough_pct ?? 50)/100), included: doc.include_rough !== false },
-          { key:'trim',        label:`${doc.trim_pct ?? 20}% Trim`,         amount: base * ((doc.trim_pct ?? 20)/100), included: doc.include_trim !== false },
-        ].forEach(p => {
-          if (!p.included || isPhasePaid(doc, p.key)) return
-          alerts.push({ doc, phaseKey: p.key, phaseLabel: p.label, amount: p.amount, daysUntil })
-        })
-      } else {
-        const startPct  = doc.service_start_percent  ?? 50
-        const endPct    = doc.service_completion_percent ?? 50
-        ;[
-          { key:'start',      label:`${startPct}% Start`,       amount: base * startPct / 100 },
-          { key:'completion', label:`${endPct}% Completion`,    amount: base * endPct / 100 },
-        ].forEach(p => {
-          if (isPhasePaid(doc, p.key)) return
-          alerts.push({ doc, phaseKey: p.key, phaseLabel: p.label, amount: p.amount, daysUntil })
-        })
-      }
+      alerts.push({ doc, phaseKey: 'invoice', phaseLabel: 'Invoice Total', amount: Number(doc.total) || 0, daysUntil })
     })
     return alerts.sort((a, b) => a.daysUntil - b.daysUntil)
   }, [savedDocs])
