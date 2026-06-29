@@ -205,7 +205,7 @@ export default function AppNew(){
   const [photoUploading, setPhotoUploading] = useState(false)
   const [includePhotos, setIncludePhotos] = useState(false)
   const [photoMessage, setPhotoMessage] = useState('')
-  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().slice(0, 10))
   const scheduleDateRef = useRef('')
   const [activeView, setActiveView] = useState(null) // 'dashboard' | 'schedule' | 'clients' | 'help'
   const [, setAllScheduledDocs] = useState([])
