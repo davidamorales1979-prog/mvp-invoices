@@ -365,9 +365,10 @@ export default function AppNew(){
     const today = new Date(); today.setHours(0,0,0,0)
     const alerts = []
     savedDocs.forEach(doc => {
-      if (!doc.scheduled_date) return
+      if (!doc.scheduled_date || doc.status === 'paid') return
       const sched = new Date(doc.scheduled_date + 'T00:00:00')
       const daysUntil = Math.round((sched - today) / 86400000)
+      const beforeLen = alerts.length
       if (doc.project_type === 'New Construction' || !doc.project_type) {
         const base = calcDocBase(doc)
         ;[
@@ -389,6 +390,10 @@ export default function AppNew(){
           if (isPhasePaid(doc, p.key)) return
           alerts.push({ doc, phaseKey: p.key, phaseLabel: p.label, amount: p.amount, daysUntil })
         })
+      }
+      // If no phase alerts were added but doc is scheduled and not fully paid, show full invoice
+      if (alerts.length === beforeLen) {
+        alerts.push({ doc, phaseKey: 'total', phaseLabel: 'Total', amount: Number(doc.total) || 0, daysUntil })
       }
     })
     return alerts.sort((a, b) => a.daysUntil - b.daysUntil)
@@ -1521,6 +1526,7 @@ export default function AppNew(){
 
   async function markDocumentPaid() {
     setDocStatus('paid')
+    await persistDocument({ status: 'paid' })
     const smsBody = {
       type: 'payment_received',
       client_name: client || 'Valued Client',
