@@ -1106,9 +1106,13 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      // ── Step 1: guarantee the quote row exists ────────────────────────────
-      const quoteId = await persistDocument({ doc_type: 'quote' })
-      if (!quoteId) { setSaveMessage('Convert failed: could not save quote'); return }
+      // ── Step 1: ensure quote row exists — but never modify it if already saved ──
+      // If savedDocId is set the quote is already in Supabase; leave it untouched.
+      // Only INSERT if this document has never been saved yet.
+      if (!savedDocId) {
+        const quoteId = await persistDocument({ doc_type: 'quote' })
+        if (!quoteId) { setSaveMessage('Convert failed: could not save quote'); return }
+      }
 
       // ── Step 2: get next counter from Supabase ────────────────────────────
       let newRaw = counter.raw + 1
@@ -1125,21 +1129,64 @@ export default function AppNew(){
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
 
-      // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────
-      // _forceInsert bypasses the savedDocId → UPDATE branch so this always
-      // creates a new row using the exact same auth/RLS path as saving a quote.
-      docTypeRef.current = 'invoice'   // set ref before persistDocument reads it
-      const newId = await persistDocument({
-        _forceInsert: true,
+      // ── Step 3: INSERT brand-new invoice row directly ─────────────────────
+      // Build the payload explicitly so this never goes through the savedDocId
+      // UPDATE branch — the quote row cannot be touched.
+      const invoicePayload = {
+        contractor,
+        show_logo: showLogo,
         doc_type: 'invoice',
+        client,
+        address,
+        houses,
+        fixtures_per_house: fixturesPerHouse,
+        price_per_fixture: pricePerFixture,
+        fixture_type: fixtureType,
+        project_type: projectType,
+        include_underground: includeUnderground,
+        include_rough: includeRough,
+        include_trim: includeTrim,
+        service_start_percent: serviceStartPercent,
+        service_completion_percent: serviceCompletionPercent,
+        underground_pct: undergroundPct,
+        rough_pct: roughPct,
+        trim_pct: trimPct,
+        services,
+        addons,
+        notes,
+        history: newHistory,
+        status,
+        total: displayTotal,
+        user_id: accountId || user.id,
+        created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        history: newHistory,
-      })
-      if (!newId) { setSaveMessage('Convert failed: could not create invoice'); return }
+        scheduled_date: scheduleDateRef.current || null,
+        signature_token: null,
+        signature_data: null,
+        signed_at: null,
+        signer_name: null,
+        client_email: clientEmail || null,
+        client_phone: clientPhone || null,
+        quote_options: null,
+        selected_option_idx: null,
+        options_token: null,
+      }
+      const { data: invData, error: invError } = await supabase
+        .from('documents')
+        .insert([invoicePayload])
+        .select('id')
+        .single()
+      if (invError) {
+        console.error('convertToInvoice insert error:', invError)
+        setSaveMessage('Convert failed: ' + invError.message)
+        return
+      }
+      const newId = invData.id
 
       // ── Step 4: update UI to point at new invoice ─────────────────────────
-      // setSavedDocId was already called inside persistDocument (_forceInsert).
+      setSavedDocId(newId)
+      docTypeRef.current = 'invoice'
       setDocType('invoice')
       setHistory(newHistory)
       counter.reset(newRaw)
