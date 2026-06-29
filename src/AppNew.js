@@ -1100,6 +1100,12 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
+      // Guarantee the quote row exists in Supabase before we create the invoice.
+      // If savedDocId is null the user never hit Save — this inserts it now.
+      // If savedDocId is already set this is a no-op UPDATE that keeps it intact.
+      const quoteId = await persistDocument({ doc_type: 'quote' })
+      if (!quoteId) return   // save failed — abort
+
       // Query Supabase for the real max counter to avoid collisions when an
       // old doc was loaded (which resets counter.raw to the doc's raw_counter)
       let newRaw = counter.raw + 1
