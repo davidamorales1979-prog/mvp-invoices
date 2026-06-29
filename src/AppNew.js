@@ -1521,6 +1521,7 @@ export default function AppNew(){
 
   async function markDocumentPaid() {
     setDocStatus('paid')
+    await persistDocument({ status: 'paid' })
     const smsBody = {
       type: 'payment_received',
       client_name: client || 'Valued Client',
