@@ -4577,8 +4577,8 @@ function ClientsPanel({ docs, onOpen, onClose }) {
       if (!map[name]) map[name] = { name, quotes: 0, invoices: 0, billed: 0, paid: 0, docs: [] }
       if (doc.doc_type === 'invoice') map[name].invoices++
       else map[name].quotes++
-      map[name].billed += Number(doc.total) || 0
-      if (doc.status === 'paid') map[name].paid += Number(doc.total) || 0
+      if (doc.doc_type === 'invoice') map[name].billed += Number(doc.total) || 0
+      if (doc.doc_type === 'invoice' && doc.status === 'paid') map[name].paid += Number(doc.total) || 0
       map[name].docs.push(doc)
     })
     return Object.values(map).sort((a, b) => b.billed - a.billed)
