@@ -1052,7 +1052,7 @@ export default function AppNew(){
       created_by: user.id,
       doc_number: docNumber,
       raw_counter: counter.raw,
-      scheduled_date: scheduleDateRef.current || null,
+      scheduled_date: scheduleDate || null,
       signature_token: signatureToken,
       signature_data: signatureData,
       signed_at: signedAt,
@@ -1161,7 +1161,7 @@ export default function AppNew(){
         created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        scheduled_date: scheduleDateRef.current || null,
+        scheduled_date: scheduleDate || null,
         signature_token: null,
         signature_data: null,
         signed_at: null,
@@ -1297,7 +1297,7 @@ export default function AppNew(){
     setNotes('')
     setHistory([])
     setStatus('draft')
-    setScheduleDate('')
+    setScheduleDate(new Date().toISOString().slice(0, 10))
     setSignatureToken(null)
     setSignatureData(null)
     setSignedAt(null)
