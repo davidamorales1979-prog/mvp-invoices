@@ -1015,7 +1015,6 @@ export default function AppNew(){
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
-    console.log('[Save] doc_type:', docTypeRef.current, '| scheduled_date:', scheduleDate || null)
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -1099,33 +1098,81 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      setDocType('invoice')
-      docTypeRef.current = 'invoice'
+      const newRaw = counter.raw + 1
+      const newDocNumber = formatDocNumber(newRaw, 'invoice')
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
+
+      // Insert a brand-new invoice document — the original quote remains unchanged in Supabase
+      const invoicePayload = {
+        contractor,
+        show_logo: showLogo,
+        doc_type: 'invoice',
+        client,
+        address,
+        houses,
+        fixtures_per_house: fixturesPerHouse,
+        price_per_fixture: pricePerFixture,
+        fixture_type: fixtureType,
+        project_type: projectType,
+        include_underground: includeUnderground,
+        include_rough: includeRough,
+        include_trim: includeTrim,
+        service_start_percent: serviceStartPercent,
+        service_completion_percent: serviceCompletionPercent,
+        underground_pct: undergroundPct,
+        rough_pct: roughPct,
+        trim_pct: trimPct,
+        services,
+        addons,
+        notes,
+        history: newHistory,
+        status,
+        total: displayTotal,
+        user_id: accountId || user.id,
+        created_by: user.id,
+        doc_number: newDocNumber,
+        raw_counter: newRaw,
+        scheduled_date: scheduleDate || null,
+        signature_token: signatureToken,
+        signature_data: signatureData,
+        signed_at: signedAt,
+        signer_name: signerName || null,
+        client_email: clientEmail || null,
+        client_phone: clientPhone || null,
+        quote_options: quoteOptions || null,
+        selected_option_idx: selectedOptionIdx ?? null,
+        options_token: optionsToken || null,
+      }
+
+      const { data: insertData, error: insertError } = await supabase
+        .from('documents').insert([invoicePayload]).select('id').single()
+      if (insertError) { setSaveMessage(`Convert failed: ${insertError.message}`); return }
+
+      const newId = insertData.id
+      // Update UI to point at the new invoice; original quote row stays as-is
+      setSavedDocId(newId)
+      setDocType('invoice')
+      docTypeRef.current = 'invoice'
       setHistory(newHistory)
-      const docId = await persistDocument({ doc_type: 'invoice', history: newHistory })
-      if (!docId) return
+      counter.reset(newRaw)
+      setSaveMessage('Invoice created')
 
       if (clientEmail) {
-        // Auto-generate a payment link for the invoice email
-        let payLink = newHistory.find(h => h.entry === 'payment_link_created')?.url
-        if (!payLink) {
-          try {
-            const { data: plData } = await supabase.functions.invoke('create-invoice-payment', {
-              body: { doc_id: docId, amount_cents: Math.round(displayTotal * 100), doc_number: docNumber, client_name: client }
-            })
-            if (plData?.url) {
-              payLink = plData.url
-              const withLink = [{ ts: new Date().toISOString(), entry: 'payment_link_created', status: 'draft', docNumber, url: payLink }, ...newHistory]
-              setHistory(withLink)
-              persistDocument({ doc_type: 'invoice', history: withLink })
-              setPaymentLinkUrl(payLink)
-            }
-          } catch (e) { console.error('auto payment link on convert:', e) }
-        }
+        let payLink = null
+        try {
+          const { data: plData } = await supabase.functions.invoke('create-invoice-payment', {
+            body: { doc_id: newId, amount_cents: Math.round(displayTotal * 100), doc_number: newDocNumber, client_name: client }
+          })
+          if (plData?.url) {
+            payLink = plData.url
+            const withLink = [{ ts: new Date().toISOString(), entry: 'payment_link_created', status: 'draft', docNumber: newDocNumber, url: payLink }, ...newHistory]
+            setHistory(withLink)
+            await supabase.from('documents').update({ history: withLink }).eq('id', newId)
+            setPaymentLinkUrl(payLink)
+          }
+        } catch (e) { console.error('auto payment link on convert:', e) }
 
-        // Send invoice email with payment link and PDF attachment
         try {
           const pdfBase64 = await generatePdfBase64()
           await supabase.functions.invoke('send-client-email', {
@@ -1133,7 +1180,7 @@ export default function AppNew(){
               type: 'invoice',
               to: clientEmail,
               client_name: client || 'Valued Client',
-              doc_number: docNumber,
+              doc_number: newDocNumber,
               total: displayTotal,
               address,
               notes,
@@ -1142,16 +1189,14 @@ export default function AppNew(){
               company_name: profileCompany || contractor,
               payment_schedule: buildPaymentSchedule(),
               pdf_base64: pdfBase64 || undefined,
-              pdf_filename: pdfBase64 ? `INV-${docNumber}.pdf` : undefined,
+              pdf_filename: pdfBase64 ? `INV-${newDocNumber}.pdf` : undefined,
             }
           })
           setSaveMessage(`Invoice emailed to ${clientEmail}`)
-        } catch (e) {
-          console.error('invoice email on convert:', e)
-        }
+        } catch (e) { console.error('invoice email on convert:', e) }
       }
+      fetchSavedDocs()
     }
-    fetchSavedDocs()
   }
   function printDoc(){ pushHistory('printed'); window.print() }
   async function newNumber(){
@@ -4620,12 +4665,7 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
         .eq(col, val)
         .not('scheduled_date', 'is', null)
         .order('scheduled_date', { ascending: true })
-      if (error) {
-        console.error('[Calendar] Fetch error:', error)
-      } else {
-        console.log('[Calendar] Total docs with scheduled_date:', (data||[]).length)
-        ;(data||[]).forEach(d => console.log('[Calendar]', d.doc_number, d.scheduled_date, d.doc_type))
-      }
+      if (error) console.error('[Calendar] Fetch error:', error)
       setDocs(data || [])
       setLoading(false)
     }
