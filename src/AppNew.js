@@ -1017,6 +1017,7 @@ export default function AppNew(){
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
+    console.log('[Save] scheduled_date being saved:', scheduleDate || null, '| doc_type:', docTypeRef.current, '| savedDocId:', savedDocId)
     const payload = {
       contractor,
       show_logo: showLogo,
@@ -1100,14 +1101,13 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      // Guarantee the quote row exists in Supabase before we create the invoice.
-      // If savedDocId is null the user never hit Save — this inserts it now.
-      // If savedDocId is already set this is a no-op UPDATE that keeps it intact.
+      // ── Step 1: guarantee the quote row exists ────────────────────────────
+      console.log('[Convert] step 1 — saving quote. savedDocId=', savedDocId, 'docType=', docType)
       const quoteId = await persistDocument({ doc_type: 'quote' })
-      if (!quoteId) return   // save failed — abort
+      console.log('[Convert] step 1 done — quoteId=', quoteId)
+      if (!quoteId) { setSaveMessage('Convert failed: could not save quote'); return }
 
-      // Query Supabase for the real max counter to avoid collisions when an
-      // old doc was loaded (which resets counter.raw to the doc's raw_counter)
+      // ── Step 2: get next counter from Supabase ────────────────────────────
       let newRaw = counter.raw + 1
       try {
         const q = supabase.from('documents').select('raw_counter').order('raw_counter', { ascending: false }).limit(1)
@@ -1119,10 +1119,13 @@ export default function AppNew(){
         }
       } catch (_) {}
       const newDocNumber = formatDocNumber(newRaw, 'invoice')
+      console.log('[Convert] step 2 — newRaw=', newRaw, 'newDocNumber=', newDocNumber)
+
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
 
-      // Insert a brand-new invoice document — the original quote remains unchanged in Supabase
+      // ── Step 3: INSERT brand-new invoice row (quote row untouched) ─────────
+      console.log('[Convert] step 3 — inserting invoice row...')
       const invoicePayload = {
         contractor,
         show_logo: showLogo,
@@ -1166,16 +1169,18 @@ export default function AppNew(){
 
       const { data: insertData, error: insertError } = await supabase
         .from('documents').insert([invoicePayload]).select('id').single()
+      console.log('[Convert] step 3 done — insertData=', insertData, 'insertError=', insertError)
       if (insertError) { setSaveMessage(`Convert failed: ${insertError.message}`); return }
 
+      // ── Step 4: update UI to point at new invoice ─────────────────────────
       const newId = insertData.id
-      // Update UI to point at the new invoice; original quote row stays as-is
       setSavedDocId(newId)
       setDocType('invoice')
       docTypeRef.current = 'invoice'
       setHistory(newHistory)
       counter.reset(newRaw)
       setSaveMessage('Invoice created')
+      console.log('[Convert] step 4 — UI updated. quoteId=', quoteId, 'newInvoiceId=', newId)
 
       if (clientEmail) {
         let payLink = null
@@ -1214,7 +1219,11 @@ export default function AppNew(){
           setSaveMessage(`Invoice emailed to ${clientEmail}`)
         } catch (e) { console.error('invoice email on convert:', e) }
       }
-      fetchSavedDocs()
+
+      // ── Step 5: refresh table — await so both rows are visible ────────────
+      console.log('[Convert] step 5 — refreshing saved docs...')
+      await fetchSavedDocs()
+      console.log('[Convert] done')
     }
   }
   function printDoc(){ pushHistory('printed'); window.print() }
@@ -4685,6 +4694,7 @@ function ScheduleCalendar({ user, accountId, isAdmin, onClose }) {
         .not('scheduled_date', 'is', null)
         .order('scheduled_date', { ascending: true })
       if (error) console.error('[Calendar] Fetch error:', error)
+      console.log('[Calendar] docs returned:', data?.length ?? 0, data?.map(d => ({ doc_number: d.doc_number, scheduled_date: d.scheduled_date })))
       setDocs(data || [])
       setLoading(false)
     }
