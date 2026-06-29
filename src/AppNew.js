@@ -377,10 +377,15 @@ export default function AppNew(){
   }, [savedDocs])
 
   const markPhasePaid = useCallback(async (doc, phaseKey) => {
-    const entry = { ts: new Date().toISOString(), entry: `phase:${phaseKey}:paid`, status: doc.status, docNumber: doc.doc_number }
+    const entry = { ts: new Date().toISOString(), entry: `phase:${phaseKey}:paid`, status: 'paid', docNumber: doc.doc_number }
     const newHistory = [entry, ...(doc.history || [])]
-    const { error } = await supabase.from('documents').update({ history: newHistory }).eq('id', doc.id).eq('user_id', accountId || user?.id)
-    if (!error) fetchSavedDocs()
+    const { error } = await supabase
+      .from('documents')
+      .update({ history: newHistory, status: 'paid' })
+      .eq('id', doc.id)
+      .eq('user_id', accountId || user?.id)
+    if (error) console.error('markPhasePaid error:', error)
+    else fetchSavedDocs()
   }, [user, accountId, fetchSavedDocs])
 
   async function startCheckout(){
