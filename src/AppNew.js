@@ -1520,8 +1520,10 @@ export default function AppNew(){
   }
 
   async function markDocumentPaid() {
-    setDocStatus('paid')
-    await persistDocument({ status: 'paid' })
+    const nextHistory = [{ ts: new Date().toISOString(), entry: 'status:paid', status: 'paid', docNumber }, ...history]
+    setStatus('paid')
+    setHistory(nextHistory)
+    await persistDocument({ status: 'paid', history: nextHistory })
     const smsBody = {
       type: 'payment_received',
       client_name: client || 'Valued Client',
