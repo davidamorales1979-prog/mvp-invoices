@@ -1019,7 +1019,7 @@ export default function AppNew(){
   async function persistDocument(overrides = {}){
     if (!user?.id) { setSaveMessage('Not logged in'); return false }
 
-    const scheduledDateValue = scheduleDateRef.current || null
+    const scheduledDateValue = scheduleDate || null
     alert('DEBUG scheduled_date in persistDocument: ' + JSON.stringify(scheduledDateValue))
 
     const payload = {
@@ -1156,7 +1156,7 @@ export default function AppNew(){
         created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        scheduled_date: scheduleDateRef.current || null,
+        scheduled_date: scheduleDate || null,
         signature_token: null,
         signature_data: null,
         signed_at: null,
