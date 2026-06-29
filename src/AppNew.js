@@ -328,9 +328,10 @@ export default function AppNew(){
   const isReadOnly = userRole === 'member' && docType === 'invoice'
 
   const fetchSavedDocs = useCallback(async () => {
-    if (!user || !accountId) return
+    const effectiveId = accountId || user?.id
+    if (!user || !effectiveId) return
     const col = isAdmin ? 'user_id' : 'created_by'
-    const val = isAdmin ? accountId : user.id
+    const val = isAdmin ? effectiveId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('*')
@@ -345,9 +346,10 @@ export default function AppNew(){
   }, [user, accountId, isAdmin])
 
   const fetchScheduledDocs = useCallback(async () => {
-    if (!user || !accountId) return
+    const effectiveId = accountId || user?.id
+    if (!user || !effectiveId) return
     const col = isAdmin ? 'user_id' : 'created_by'
-    const val = isAdmin ? accountId : user.id
+    const val = isAdmin ? effectiveId : user.id
     const { data, error } = await supabase
       .from('documents')
       .select('id, doc_number, doc_type, client, address, total, status, scheduled_date')
@@ -1098,7 +1100,18 @@ export default function AppNew(){
   }
   async function convertToInvoice(){
     if (docType !== 'invoice'){
-      const newRaw = counter.raw + 1
+      // Query Supabase for the real max counter to avoid collisions when an
+      // old doc was loaded (which resets counter.raw to the doc's raw_counter)
+      let newRaw = counter.raw + 1
+      try {
+        const q = supabase.from('documents').select('raw_counter').order('raw_counter', { ascending: false }).limit(1)
+        const { data: cData } = isAdmin
+          ? await q.eq('user_id', accountId || user.id)
+          : await q.eq('created_by', user.id)
+        if (Array.isArray(cData) && cData.length > 0 && cData[0].raw_counter != null) {
+          newRaw = cData[0].raw_counter + 1
+        }
+      } catch (_) {}
       const newDocNumber = formatDocNumber(newRaw, 'invoice')
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history]
