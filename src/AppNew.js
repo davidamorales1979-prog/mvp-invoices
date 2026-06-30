@@ -1207,7 +1207,7 @@ export default function AppNew(){
               notes,
               payment_link: payLink,
               contractor_name: contractor,
-              company_name: profileCompany || contractor,
+              company_name: contractor,
               payment_schedule: buildPaymentSchedule(),
               pdf_base64: pdfBase64 || undefined,
               pdf_filename: pdfBase64 ? `INV-${newDocNumber}.pdf` : undefined,
@@ -1471,7 +1471,7 @@ export default function AppNew(){
             notes,
             payment_link: payLink,
             contractor_name: contractor,
-            company_name: profileCompany || contractor,
+            company_name: contractor,
             payment_schedule: buildPaymentSchedule(),
             pdf_base64: pdfBase64 || undefined,
             pdf_filename: pdfBase64 ? `${prefix}-${docNumber}.pdf` : undefined,
@@ -1517,7 +1517,7 @@ export default function AppNew(){
       doc_number: docNumber,
       total: displayTotal,
       contractor_name: contractor,
-      company_name: profileCompany || contractor,
+      company_name: contractor,
     }
     await Promise.allSettled([
       clientEmail
@@ -1529,7 +1529,7 @@ export default function AppNew(){
               doc_number: docNumber,
               total: displayTotal,
               contractor_name: contractor,
-              company_name: profileCompany || contractor,
+              company_name: contractor,
             }
           }).then(() => setSaveMessage(`Payment receipt sent to ${clientEmail}`))
           .catch(e => console.error('receipt email failed:', e))
@@ -1555,7 +1555,7 @@ export default function AppNew(){
           to: clientPhone,
           client_name: client || 'Valued Client',
           contractor_name: contractor,
-          company_name: profileCompany || contractor,
+          company_name: contractor,
           address,
           scheduled_date: scheduleDate || null,
         }
