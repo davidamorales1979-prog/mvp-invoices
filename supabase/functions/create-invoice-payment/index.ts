@@ -27,10 +27,32 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { doc_id, amount_cents, doc_number, client_name } = await req.json()
+    const { doc_id, doc_number, client_name } = await req.json()
 
-    if (!doc_id || !amount_cents || amount_cents <= 0) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: doc_id and amount_cents' }), {
+    if (!doc_id) {
+      return new Response(JSON.stringify({ error: 'Missing required field: doc_id' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      })
+    }
+
+    // Fetch the invoice total from the database — never trust the caller-supplied amount
+    const { data: doc, error: docError } = await supabaseClient
+      .from('documents')
+      .select('total, doc_number, client')
+      .eq('id', doc_id)
+      .single()
+
+    if (docError || !doc) {
+      return new Response(JSON.stringify({ error: 'Document not found' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404,
+      })
+    }
+
+    const amount_cents = Math.round(Number(doc.total) * 100)
+    if (!amount_cents || amount_cents <= 0) {
+      return new Response(JSON.stringify({ error: 'Document has no valid total' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       })
@@ -46,6 +68,9 @@ Deno.serve(async (req) => {
     // Stripe allows 30 min – 24 hours; use the maximum
     const expiresAt = Math.floor(Date.now() / 1000) + 24 * 60 * 60
 
+    const resolvedDocNumber = doc.doc_number || doc_number || 'Invoice'
+    const resolvedClientName = doc.client || client_name || 'Invoice'
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -55,7 +80,7 @@ Deno.serve(async (req) => {
           currency: 'usd',
           unit_amount: amount_cents,
           product_data: {
-            name: `${doc_number} — ${client_name || 'Invoice'}`,
+            name: `${resolvedDocNumber} — ${resolvedClientName}`,
             description: 'Plumbing services — FieldQuote',
           },
         },

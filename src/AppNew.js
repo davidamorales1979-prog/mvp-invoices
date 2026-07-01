@@ -449,8 +449,8 @@ export default function AppNew(){
       await fetchSavedDocs()
     }
 
-    // Reuse existing link if already generated (stored in history)
-    const existingLink = history.find(h => h.entry === 'payment_link_created')
+    // Reuse existing link only if it was created for the current document number
+    const existingLink = history.find(h => h.entry === 'payment_link_created' && h.docNumber === docNumber)
     if (existingLink?.url) {
       setPaymentLinkUrl(existingLink.url)
       setShowPaymentLinkModal(true)
@@ -462,7 +462,6 @@ export default function AppNew(){
       const { data, error } = await supabase.functions.invoke('create-invoice-payment', {
         body: {
           doc_id: savedDocId,
-          amount_cents: Math.round(displayTotal * 100),
           doc_number: docNumber,
           client_name: client,
         }
@@ -1114,68 +1113,67 @@ export default function AppNew(){
       } catch (_) {}
       const newDocNumber = formatDocNumber(newRaw, 'invoice')
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
-      const newHistory = [convertEntry, ...history]
+      const newHistory = [convertEntry, ...history.filter(h => h.entry !== 'payment_link_created')]
 
-      // ── Step 3: INSERT brand-new invoice row directly ─────────────────────
-      // Build the payload explicitly so this never goes through the savedDocId
-      // UPDATE branch — the quote row cannot be touched.
-      const invoicePayload = {
-        contractor,
-        show_logo: showLogo,
+      // Determine which phases to include on the invoice.
+      // When all three are checked (the default "full scope quote" state), that means
+      // the quote covers the whole project — auto-select only the first phase
+      // (underground) for this invoice since invoices are issued per billing milestone.
+      // If the user already unchecked phases before converting, respect their selection.
+      const allPhasesSelected = projectType === 'New Construction'
+        && includeUnderground && includeRough && includeTrim
+      const invIncludeUnderground = projectType === 'New Construction'
+        ? (allPhasesSelected ? true : includeUnderground)
+        : includeUnderground
+      const invIncludeRough = projectType === 'New Construction'
+        ? (allPhasesSelected ? false : includeRough)
+        : includeRough
+      const invIncludeTrim = projectType === 'New Construction'
+        ? (allPhasesSelected ? false : includeTrim)
+        : includeTrim
+
+      const invPhaseAmount = (invIncludeUnderground ? phases.underground : 0)
+        + (invIncludeRough ? phases.rough : 0)
+        + (invIncludeTrim ? phases.trim : 0)
+      const invHasPhases = projectType === 'New Construction'
+        && (invIncludeUnderground || invIncludeRough || invIncludeTrim)
+      const invoiceTotal = invHasPhases ? invPhaseAmount + servicesTotal : subtotal
+
+      // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────────
+      // Using persistDocument with _forceInsert ensures total:invoiceTotal wins
+      // over the displayTotal closure (which still reflects the quote at this point).
+      console.log('[convertToInvoice] invoiceTotal:', invoiceTotal, '| displayTotal (stale):', displayTotal, '| invHasPhases:', invHasPhases, '| invPhaseAmount:', invPhaseAmount, '| servicesTotal:', servicesTotal, '| subtotal:', subtotal)
+      const newId = await persistDocument({
+        _forceInsert: true,
         doc_type: 'invoice',
-        client,
-        address,
-        houses,
-        fixtures_per_house: fixturesPerHouse,
-        price_per_fixture: pricePerFixture,
-        fixture_type: fixtureType,
-        project_type: projectType,
-        include_underground: includeUnderground,
-        include_rough: includeRough,
-        include_trim: includeTrim,
-        service_start_percent: serviceStartPercent,
-        service_completion_percent: serviceCompletionPercent,
-        underground_pct: undergroundPct,
-        rough_pct: roughPct,
-        trim_pct: trimPct,
-        services,
-        addons,
-        notes,
+        total: invoiceTotal,
+        include_underground: invIncludeUnderground,
+        include_rough: invIncludeRough,
+        include_trim: invIncludeTrim,
         history: newHistory,
-        status,
-        total: displayTotal,
-        user_id: accountId || user.id,
-        created_by: user.id,
         doc_number: newDocNumber,
         raw_counter: newRaw,
-        scheduled_date: scheduleDate || null,
         signature_token: null,
         signature_data: null,
         signed_at: null,
         signer_name: null,
-        client_email: clientEmail || null,
-        client_phone: clientPhone || null,
         quote_options: null,
         selected_option_idx: null,
         options_token: null,
-      }
-      const { data: invData, error: invError } = await supabase
-        .from('documents')
-        .insert([invoicePayload])
-        .select('id')
-        .single()
-      if (invError) {
-        console.error('convertToInvoice insert error:', invError)
-        setSaveMessage('Convert failed: ' + invError.message)
+      })
+      if (!newId) {
+        setSaveMessage('Convert failed: could not create invoice')
         return
       }
-      const newId = invData.id
 
       // ── Step 4: update UI to point at new invoice ─────────────────────────
       setSavedDocId(newId)
       docTypeRef.current = 'invoice'
       setDocType('invoice')
       setHistory(newHistory)
+      setIncludeUnderground(invIncludeUnderground)
+      setIncludeRough(invIncludeRough)
+      setIncludeTrim(invIncludeTrim)
       counter.reset(newRaw)
       setSaveMessage('Invoice created')
 
@@ -1183,7 +1181,7 @@ export default function AppNew(){
         let payLink = null
         try {
           const { data: plData } = await supabase.functions.invoke('create-invoice-payment', {
-            body: { doc_id: newId, amount_cents: Math.round(displayTotal * 100), doc_number: newDocNumber, client_name: client }
+            body: { doc_id: newId, doc_number: newDocNumber, client_name: client }
           })
           if (plData?.url) {
             payLink = plData.url
@@ -1202,7 +1200,7 @@ export default function AppNew(){
               to: clientEmail,
               client_name: client || 'Valued Client',
               doc_number: newDocNumber,
-              total: displayTotal,
+              total: invoiceTotal,
               address,
               notes,
               payment_link: payLink,
@@ -1454,7 +1452,27 @@ export default function AppNew(){
   async function sendEmail(){
     if (clientEmail) {
       // Send branded HTML email via Resend
-      const payLink = docType === 'invoice' ? history.find(h => h.entry === 'payment_link_created')?.url : null
+      let payLink = null
+
+      // Always create a fresh Stripe session for invoice emails so the amount
+      // always matches the current saved invoice total (never a stale link)
+      if (docType === 'invoice' && savedDocId) {
+        try {
+          setSaveMessage('Creating payment link…')
+          const { data: plData } = await supabase.functions.invoke('create-invoice-payment', {
+            body: { doc_id: savedDocId, doc_number: docNumber, client_name: client }
+          })
+          if (plData?.url) {
+            payLink = plData.url
+            const linkEntry = { ts: new Date().toISOString(), entry: 'payment_link_created', status, docNumber, url: payLink }
+            const newHistory = [linkEntry, ...history.filter(h => !(h.entry === 'payment_link_created' && h.docNumber === docNumber))]
+            setHistory(newHistory)
+            persistDocument({ history: newHistory })
+            setPaymentLinkUrl(payLink)
+          }
+        } catch (e) { console.error('payment link auto-create in sendEmail:', e) }
+      }
+
       setSaveMessage('Generating PDF…')
       const pdfBase64 = await generatePdfBase64()
       const prefix = docType === 'invoice' ? 'INV' : 'QT'
