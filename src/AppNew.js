@@ -1142,7 +1142,6 @@ export default function AppNew(){
       // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────────
       // Using persistDocument with _forceInsert ensures total:invoiceTotal wins
       // over the displayTotal closure (which still reflects the quote at this point).
-      console.log('[convertToInvoice] invoiceTotal:', invoiceTotal, '| displayTotal (stale):', displayTotal, '| invHasPhases:', invHasPhases, '| invPhaseAmount:', invPhaseAmount, '| servicesTotal:', servicesTotal, '| subtotal:', subtotal)
       const newId = await persistDocument({
         _forceInsert: true,
         doc_type: 'invoice',
