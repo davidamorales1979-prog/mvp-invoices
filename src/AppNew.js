@@ -228,7 +228,6 @@ export default function AppNew(){
   const [paymentLinkUrl, setPaymentLinkUrl] = useState(null)
   const [paymentLinkLoading, setPaymentLinkLoading] = useState(false)
   const [clientEmail, setClientEmail] = useState('')
-  const [clientPhone, setClientPhone] = useState('')
   const [quoteOptions, setQuoteOptions] = useState(null)
   const [selectedOptionIdx, setSelectedOptionIdx] = useState(null)
   const [optionsToken, setOptionsToken] = useState(null)
@@ -718,7 +717,6 @@ export default function AppNew(){
     const savedLink = (data.history ?? []).find(h => h.entry === 'payment_link_created')
     setPaymentLinkUrl(savedLink?.url ?? null)
     setClientEmail(data.client_email ?? '')
-    setClientPhone(data.client_phone ?? '')
     setQuoteOptions(data.quote_options ?? null)
     setSelectedOptionIdx(data.selected_option_idx ?? null)
     setOptionsToken(data.options_token ?? null)
@@ -1044,7 +1042,6 @@ export default function AppNew(){
       signed_at: signedAt,
       signer_name: signerName || null,
       client_email: clientEmail || null,
-      client_phone: clientPhone || null,
       quote_options: quoteOptions || null,
       selected_option_idx: selectedOptionIdx ?? null,
       options_token: optionsToken || null,
@@ -1528,59 +1525,19 @@ export default function AppNew(){
     setStatus('paid')
     setHistory(nextHistory)
     await persistDocument({ status: 'paid', history: nextHistory })
-    const smsBody = {
-      type: 'payment_received',
-      client_name: client || 'Valued Client',
-      doc_number: docNumber,
-      total: displayTotal,
-      contractor_name: contractor,
-      company_name: contractor,
-    }
-    await Promise.allSettled([
-      clientEmail
-        ? supabase.functions.invoke('send-client-email', {
-            body: {
-              type: 'payment_receipt',
-              to: clientEmail,
-              client_name: client || 'Valued Client',
-              doc_number: docNumber,
-              total: displayTotal,
-              contractor_name: contractor,
-              company_name: contractor,
-            }
-          }).then(() => setSaveMessage(`Payment receipt sent to ${clientEmail}`))
-          .catch(e => console.error('receipt email failed:', e))
-        : Promise.resolve(),
-      clientPhone
-        ? supabase.functions.invoke('send-client-sms', { body: { ...smsBody, to: clientPhone } })
-            .then(() => setSaveMessage(m => m ? m + ' + SMS sent' : `Payment SMS sent to ${clientPhone}`))
-            .catch(e => console.error('receipt SMS failed:', e))
-        : Promise.resolve(),
-    ])
-  }
-
-  async function sendOnMyWay() {
-    if (!clientPhone) {
-      setSaveMessage('Add a client phone number to send SMS notifications.')
-      return
-    }
-    setSaveMessage('Sending SMS…')
-    try {
-      const { error } = await supabase.functions.invoke('send-client-sms', {
+    if (clientEmail) {
+      supabase.functions.invoke('send-client-email', {
         body: {
-          type: 'on_my_way',
-          to: clientPhone,
+          type: 'payment_receipt',
+          to: clientEmail,
           client_name: client || 'Valued Client',
+          doc_number: docNumber,
+          total: displayTotal,
           contractor_name: contractor,
           company_name: contractor,
-          address,
-          scheduled_date: scheduleDate || null,
         }
-      })
-      if (error) throw new Error(error.message)
-      setSaveMessage(`"On My Way" SMS sent to ${clientPhone}`)
-    } catch (e) {
-      setSaveMessage('SMS failed: ' + e.message)
+      }).then(() => setSaveMessage(`Payment receipt sent to ${clientEmail}`))
+        .catch(e => console.error('receipt email failed:', e))
     }
   }
 
@@ -2061,7 +2018,6 @@ export default function AppNew(){
             <button onClick={() => setActiveView('schedule')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>📅 Schedule</button>
             <button onClick={() => setActiveView('clients')} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>👤 Clients</button>
             <button onClick={sendEmail} style={{ background:'#0f2740', color:'#fff', border:`1px solid ${GOLD}`, padding:8, borderRadius:6 }}>Send Email</button>
-            <button onClick={sendOnMyWay} title={clientPhone ? `SMS ${clientPhone}` : 'Add a client phone number to enable'} style={{ background: clientPhone ? '#0f2740' : '#07111e', color: clientPhone ? '#fff' : '#445', border:`1px solid ${clientPhone ? GOLD : '#334'}`, padding:8, borderRadius:6, cursor: clientPhone ? 'pointer' : 'default' }}>📍 On My Way</button>
             {docType === 'quote' && (
               <button
                 onClick={() => quoteOptions?.length ? setShowOptionsModal(true) : openOptionsEditor()}
@@ -2290,11 +2246,6 @@ export default function AppNew(){
           <div className='no-print'>
             <label style={{ color:'#9fb0c6' }}>Client Email <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for emails</span></label>
             <input type='email' value={clientEmail} onChange={e=>setClientEmail(e.target.value)} placeholder='client@example.com'
-              style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
-          </div>
-          <div className='no-print'>
-            <label style={{ color:'#9fb0c6' }}>Client Phone <span style={{ color:'#556a80', fontWeight:400, fontSize:11 }}>— for SMS</span></label>
-            <input type='tel' value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder='(555) 123-4567'
               style={{ width:'100%', padding:8, marginTop:6, background:'#0a1e32', color:'#fff', border:'1px solid #223', borderRadius:4 }} />
           </div>
           <div>
