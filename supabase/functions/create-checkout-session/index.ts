@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
       customer: customerId,
       payment_method_types: ['card'],
       mode: 'subscription',
-      line_items: [{ price: 'price_1TfAcaRcb5ReY7IfochZSsl7', quantity: 1 }],
+      line_items: [{ price: 'price_1TpccsRgnn1TpyaASv9vakuw', quantity: 1 }],
       // Stamp user_id on the subscription so the webhook can always resolve the user
       subscription_data: {
         metadata: { user_id: user.id },
