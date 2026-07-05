@@ -30,6 +30,9 @@ const SERVICES = [
   { id: 'gas_riser',    name: 'Gas Riser',                     unit: 400 },
   { id: 'gas_underground', name: 'Underground Gas Line',       unit: 0 },
   { id: 'gas_indoor',   name: 'Gas System Indoor',             unit: 300 },
+  // HVAC
+  { id: 'heat_pump_appliance', name: 'Heat Pump Appliance',    unit: 0 },
+  { id: 'heat_pump_install',   name: 'Heat Pump Installation', unit: 0 },
   // Others
   { id: 'water_heater',    name: 'Water Heater',                  unit: 600, startUnit: 0, finishUnit: 0 },
   { id: 'tankless_wh',     name: 'Tankless Water Heater',         unit: 0, startUnit: 0, finishUnit: 0 },
@@ -90,6 +93,7 @@ const SERVICE_GROUPS = [
   { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin', 'sewer_clogged', 'toilet_clogged'] },
   { label: 'Water',                ids: ['water', 'water_tap'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
+  { label: 'HVAC',                  ids: ['heat_pump_appliance', 'heat_pump_install'] },
   { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup', 'leak_detection', 'faucet_repair', 'drain_cleaning', 'water_pressure', 'pipe_burst', 'toilet_repair', 'wh_flush'] },
   { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'fix_shower_valve', 'fix_tub_valve', 'fix_ro_filter'] },
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_gas_furnace_repl', 'fix_gas_wh_repl'] },
