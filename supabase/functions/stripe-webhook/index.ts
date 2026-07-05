@@ -144,20 +144,23 @@ Deno.serve(async (req) => {
   async function updateSubscription(userId, stripeSub, label) {
     const { data: current } = await supabase
       .from('subscriptions')
-      .select('stripe_subscription_id')
+      .select('stripe_subscription_id, status')
       .eq('user_id', userId)
       .maybeSingle()
 
     const storedSubId = current?.stripe_subscription_id
     if (storedSubId && storedSubId !== stripeSub.id) {
-      const isTerminal = ['canceled', 'incomplete_expired'].includes(stripeSub.status)
-      if (isTerminal) {
-        // Late/out-of-order event for a different, now-terminal subscription — ignore it
-        console.log(`${label}: IGNORED — event sub ${stripeSub.id} (${stripeSub.status}) does not match tracked sub ${storedSubId}`)
+      // Event is for a different subscription than what we're tracking.
+      // Check the STORED status — not the event's status — to decide which sub is authoritative.
+      const storedIsActive = ['active', 'trialing'].includes(current?.status)
+      if (storedIsActive) {
+        // The sub we're tracking is currently active — ignore all events for any other sub ID.
+        // This blocks late events for an old sub regardless of what status that event carries.
+        console.log(`${label}: IGNORED — event sub ${stripeSub.id} (${stripeSub.status}) does not match currently active tracked sub ${storedSubId}`)
         return
       }
-      // Non-terminal event (active, trialing) for a different sub_id — the new sub is taking over
-      console.log(`${label}: sub ID mismatch — updating tracked sub from ${storedSubId} → ${stripeSub.id}`)
+      // Stored sub is not active (canceled, past_due, etc) — allow this event to take over tracking.
+      console.log(`${label}: stored sub ${storedSubId} is ${current?.status}, updating tracking → ${stripeSub.id}`)
     }
 
     const { error } = await supabase
