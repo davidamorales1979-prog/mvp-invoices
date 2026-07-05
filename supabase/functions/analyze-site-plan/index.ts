@@ -33,8 +33,8 @@ SEWER:
 
 STORM / DRAINAGE:
 - storm: Storm drain pipe / storm sewer main — qty = total linear feet of storm pipe. Include pipe size and material in notes (e.g. "12\" RCP, 150 LF").
-- catch_basin: Catch basin (CB) — precast concrete structure with sump, typically 24\"+ diameter, set in roadway or parking area — qty = count of CB symbols.
-- storm_inlet: Storm drain inlet / area drain / grated inlet — smaller surface drainage inlet (DI symbol, area drain, grated inlet on flat surface) that is NOT a full catch basin structure — qty = count.
+- catch_basin: **PRIMARY SIGNAL: any structure labeled "CB" on the drawing.** Civil utility plans use the notation "CB", "##-CB-##" (e.g. "40-CB-24", "40-CB-12"), or "CATCH BASIN" to label these structures. They are precast concrete sumped structures set in roadway, parking lot, or curb line, with TC (top of curb) and FL (flow line) elevations annotated nearby. Count every distinct CB label as one catch basin. Do NOT classify a "CB"-labeled structure as a storm_inlet — if it says "CB", it is a catch_basin. qty = total count of all CB labels on the plan.
+- storm_inlet: Surface drainage inlet that is explicitly labeled "DI" (drain inlet), "AI" (area inlet), "AREA DRAIN", or shown as a simple grated square/circle symbol without a "CB" label. Do NOT use this service_id for any structure labeled "CB". qty = count of non-CB inlet symbols.
 - grease: Grease trap / grease interceptor — qty = count, only if explicitly labeled GT or grease interceptor.
 
 WATER:
