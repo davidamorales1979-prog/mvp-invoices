@@ -39,16 +39,41 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
 
-    // Get or create Stripe customer linked to this user
+    // Get subscription row — used for status check and customer ID
     const { data: sub, error: subError } = await supabaseAdmin
       .from('subscriptions')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, status')
       .eq('user_id', user.id)
       .maybeSingle()
 
     if (subError) console.error('create-checkout-session: sub lookup error:', subError.message)
 
+    // Layer 1: Supabase status check
+    if (sub?.status === 'active' || sub?.status === 'trialing') {
+      console.log(`create-checkout-session: user=${user.id} already has status=${sub.status}, blocking new session`)
+      return new Response(JSON.stringify({ already_subscribed: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      })
+    }
+
     let customerId = sub?.stripe_customer_id
+
+    // Layer 2: Stripe live check — catches stale/missing DB rows
+    if (customerId) {
+      const existing = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 1,
+      })
+      if (existing.data.length > 0) {
+        console.log(`create-checkout-session: user=${user.id} has active Stripe sub ${existing.data[0].id}, blocking new session`)
+        return new Response(JSON.stringify({ already_subscribed: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        })
+      }
+    }
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,

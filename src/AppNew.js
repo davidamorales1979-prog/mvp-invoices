@@ -410,7 +410,13 @@ export default function AppNew(){
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { origin: window.location.origin }
       })
-      if (error || !data?.url) throw new Error(error?.message || 'No checkout URL returned')
+      if (error) throw new Error(error?.message || 'Checkout error')
+      if (data?.already_subscribed) {
+        alert('Your account already has an active subscription. Refresh the page to access the app.')
+        setCheckoutLoading(false)
+        return
+      }
+      if (!data?.url) throw new Error('No checkout URL returned')
       window.location.href = data.url
     } catch (e) {
       alert('Could not start checkout: ' + e.message)
