@@ -1703,6 +1703,12 @@ export default function AppNew(){
     setWaterFixtureUnitPrice(0)
     setGasFixtureUnitPrice(0)
     setPricePerFixture(0)
+    // Enable all three phase checkboxes so the base % calculation is ready
+    if (projectType === 'New Construction') {
+      setIncludeUnderground(true)
+      setIncludeRough(true)
+      setIncludeTrim(true)
+    }
     // Items without a service_id become add-ons
     const extras = toApply.filter(item => !item.service_id)
     if (extras.length > 0) {
