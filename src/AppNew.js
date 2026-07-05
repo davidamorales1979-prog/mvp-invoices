@@ -99,7 +99,7 @@ const SERVICE_GROUPS = [
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_gas_furnace_repl', 'fix_gas_wh_repl'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
