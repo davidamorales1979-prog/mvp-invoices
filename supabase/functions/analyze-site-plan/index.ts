@@ -32,34 +32,42 @@ SEWER:
 - sewer_tap: Sewer lateral / tap connection — qty = number of individual lot connections or taps to the sewer main.
 
 STORM / DRAINAGE:
-- storm: Storm drain pipe / storm sewer — qty = total linear feet of storm pipe shown. Include pipe size and material in notes (e.g. "12\" RCP, 150 LF").
-- catch_basin: Catch basin or area drain inlet — qty = count of CB, DI, or inlet symbols on the plan.
-- grease: Grease trap / grease interceptor — qty = count, only if explicitly labeled.
+- storm: Storm drain pipe / storm sewer main — qty = total linear feet of storm pipe. Include pipe size and material in notes (e.g. "12\" RCP, 150 LF").
+- catch_basin: Catch basin (CB) — precast concrete structure with sump, typically 24\"+ diameter, set in roadway or parking area — qty = count of CB symbols.
+- storm_inlet: Storm drain inlet / area drain / grated inlet — smaller surface drainage inlet (DI symbol, area drain, grated inlet on flat surface) that is NOT a full catch basin structure — qty = count.
+- grease: Grease trap / grease interceptor — qty = count, only if explicitly labeled GT or grease interceptor.
 
 WATER:
-- water: Water main / water service line — qty = number of water meters or service connections shown. If a water main is shown with multiple service laterals, qty = number of laterals.
+- water: Water main / water service line — qty = number of water meters or service connections shown. If a water main runs with multiple service laterals, qty = number of laterals.
 - water_tap: Water meter tap / corporation stop — qty = count of individual water taps or corporation stops to the main.
 
 GAS:
-- gas_underground: Underground gas main or lateral — qty = total linear feet of gas piping shown on plan. Include pipe size in notes (e.g. "2\" HDPE gas main, 320 LF").
-- gas_indoor: Gas service per house/unit — qty = number of lots or units receiving an individual gas service connection. Use this when the plan shows per-lot gas stubs (3+ houses only).
-- temp_gas: Temporary gas service — qty = count, only if explicitly labeled as temporary.
-- gas_riser: Gas riser / gas meter — qty = count of gas meter symbols or riser locations shown.
+- gas_underground: Underground gas main or lateral — qty = total linear feet of gas piping shown. Include pipe size in notes (e.g. "2\" HDPE gas main, 320 LF").
+- gas_indoor: Gas service per house/unit — qty = number of lots or units receiving an individual gas service stub. Use only when 3 or more lots each show a gas stub.
+- temp_gas: Temporary gas service — qty = count, only if explicitly labeled temporary.
+- gas_riser: Gas riser / gas meter — qty = count of gas meter symbols or riser locations.
+
+UTILITIES / SITE CONNECTIONS:
+- sewer_tap: (see SEWER above)
+- water_tap: (see WATER above)
+- backflow: Backflow preventer device (BFP, DCVA, RPZ) — qty = count of backflow preventer symbols or call-outs on the plan.
+- manhole: Manhole (MH) — qty = count of manhole symbols. Include rim elevation and invert elevation in notes if labeled on plan.
+- cleanout: Clean-out (CO) — qty = count of clean-out symbols on the plan.
+- fire_hydrant: Fire hydrant (FH) — qty = count of fire hydrant symbols on the plan.
+- hose_bib_vb: Hose bibb with vacuum breaker — qty = count of exterior hose bibb connections labeled with vacuum breaker (VB) on the site plan. Do NOT use this for interior hose bibs on floor plans.
+- storm_inlet: (see STORM / DRAINAGE above)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ITEMS WITHOUT A SERVICE ID (set service_id to null):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Manholes: service_id null, service_name "Manhole", qty = count of MH symbols. Include rim/invert elevations in notes if shown.
-- Clean-outs: service_id null, service_name "Clean-out", qty = count of CO symbols.
-- Fire hydrants: service_id null, service_name "Fire Hydrant", qty = count.
 - Detention / retention basin: service_id null, service_name "Detention Basin", qty = 1.
-- Any other infrastructure not in the approved list above.
+- Retaining wall: service_id null, service_name "Retaining Wall", qty = LF if measurable.
+- Any other civil infrastructure not in the approved list above.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 MEASUREMENT RULES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 - For pipe runs: read the labeled dimension or scale bar. Sum all segments of the same pipe type. qty is always a whole number (round up).
-- For per-house gas (gas_indoor): only report when the plan shows 3 or more lots/units each getting individual gas stubs. qty = number of lots served.
 - Always put pipe diameter, material, and any relevant measurement detail in the notes field — the contractor needs this to price the work.
 - If you can see a scale bar but dimensions are not labeled, estimate from the scale. Note "estimated from scale" in notes.
 - If a quantity cannot be determined from the drawing, omit that item entirely — do not guess zero.

@@ -30,6 +30,12 @@ const SERVICES = [
   { id: 'gas_riser',    name: 'Gas Riser',                     unit: 400 },
   { id: 'gas_underground', name: 'Underground Gas Line',       unit: 0 },
   { id: 'gas_indoor',   name: 'Gas System Indoor',             unit: 300 },
+  // Utilities
+  { id: 'storm_inlet',  name: 'Storm Drain Inlet / Area Drain', unit: 0 },
+  { id: 'manhole',      name: 'Manhole',                        unit: 0 },
+  { id: 'cleanout',     name: 'Clean-out',                      unit: 0 },
+  { id: 'fire_hydrant', name: 'Fire Hydrant',                   unit: 0 },
+  { id: 'hose_bib_vb',  name: 'Hose Bibb with Vacuum Breaker',  unit: 0 },
   // HVAC
   { id: 'heat_pump_appliance', name: 'Heat Pump Appliance',    unit: 0 },
   { id: 'heat_pump_install',   name: 'Heat Pump Installation', unit: 0 },
@@ -46,7 +52,7 @@ const SERVICES = [
   { id: 'shutoff_valve',     name: 'Shut-off Valve Replacement',       unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'garbage_disposal',  name: 'Garbage Disposal Installation',    unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'sump_pump',         name: 'Sump Pump Installation',           unit: 0, startUnit: 0, finishUnit: 0 },
-  { id: 'backflow',          name: 'Backflow Preventer',               unit: 0, startUnit: 0, finishUnit: 0 },
+  { id: 'backflow',          name: 'Backflow Preventer',               unit: 0 },
   { id: 'irrigation_hookup', name: 'Irrigation System Hookup',         unit: 0, startUnit: 0, finishUnit: 0 },
   { id: 'leak_detection',  name: 'Leak Detection / Water Leak Repair', unit: 0 },
   { id: 'faucet_repair',   name: 'Faucet Repair',                      unit: 0 },
@@ -90,16 +96,17 @@ const SERVICES = [
 ]
 
 const SERVICE_GROUPS = [
-  { label: 'Sewer',                ids: ['sewer', 'sewer_tap', 'storm', 'grease', 'catch_basin', 'sewer_clogged', 'toilet_clogged'] },
-  { label: 'Water',                ids: ['water', 'water_tap'] },
+  { label: 'Sewer',                ids: ['sewer', 'storm', 'grease', 'catch_basin', 'sewer_clogged', 'toilet_clogged'] },
+  { label: 'Water',                ids: ['water'] },
   { label: 'Gas',                  ids: ['temp_gas', 'gas_riser', 'gas_underground', 'gas_indoor'] },
-  { label: 'HVAC',                  ids: ['heat_pump_appliance', 'heat_pump_install'] },
-  { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup', 'leak_detection', 'faucet_repair', 'drain_cleaning', 'water_pressure', 'pipe_burst', 'toilet_repair', 'wh_flush'] },
+  { label: 'Utilities',            ids: ['sewer_tap', 'water_tap', 'storm_inlet', 'manhole', 'cleanout', 'backflow', 'fire_hydrant', 'hose_bib_vb'] },
+  { label: 'HVAC',                 ids: ['heat_pump_appliance', 'heat_pump_install'] },
+  { label: 'Others',               ids: ['water_heater', 'tankless_wh', 'recirc_pump', 'wh_replacement', 'manablok', 'repiping', 'cut_bust', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'irrigation_hookup', 'leak_detection', 'faucet_repair', 'drain_cleaning', 'water_pressure', 'pipe_burst', 'toilet_repair', 'wh_flush'] },
   { label: 'Water Fixtures', ids: ['fix_toilet', 'fix_faucet', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_hose_bib', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'fix_shower_valve', 'fix_tub_valve', 'fix_ro_filter'] },
   { label: 'Gas Fixtures',  ids: ['fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_gas_furnace_repl', 'fix_gas_wh_repl'] },
 ]
 
-const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'backflow', 'irrigation_hookup']
+const BASE_SERVICE_IDS = ['water', 'water_heater', 'tankless_wh', 'recirc_pump', 'manablok', 'gas_indoor', 'repiping', 'wh_replacement', 'fix_hose_bib', 'fix_bathroom_sink', 'fix_shower', 'fix_master_tub', 'fix_kitchen_sink', 'fix_wet_bar', 'fix_laundry_sink', 'fix_ice_maker', 'fix_pot_filler', 'fix_laundry', 'fix_kitchen_patio', 'fix_gas_furnace', 'fix_gas_wh', 'fix_gas_dryer', 'fix_gas_stove', 'fix_gas_bbq', 'fix_gas_generator', 'fix_gas_kitchen_patio', 'fix_gas_range', 'fix_dishwasher', 'fix_water_softener', 'fix_purifier', 'fix_shower_liner', 'pressure_reg', 'expansion_tank', 'shutoff_valve', 'garbage_disposal', 'sump_pump', 'irrigation_hookup']
 
 function mergeServices(saved) {
   const map = new Map((saved || []).map(s => [s.id, s]))
