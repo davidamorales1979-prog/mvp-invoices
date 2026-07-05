@@ -1966,7 +1966,7 @@ export default function AppNew(){
             </>
           )}
           <div style={{ background:'#0a1e32', borderRadius:10, padding:'16px 20px', marginBottom:24 }}>
-            <div style={{ fontSize:36, fontWeight:700, color:GOLD }}>$29<span style={{ fontSize:16, color:'#9fb0c6', fontWeight:400 }}>/month</span></div>
+            <div style={{ fontSize:36, fontWeight:700, color:GOLD }}>$39<span style={{ fontSize:16, color:'#9fb0c6', fontWeight:400 }}>/month</span></div>
             <div style={{ color:'#7f98b0', fontSize:13, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
           </div>
           <button
@@ -1974,7 +1974,7 @@ export default function AppNew(){
             disabled={checkoutLoading}
             style={{ width:'100%', padding:'13px 0', borderRadius:8, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:16, cursor:'pointer', marginBottom:12 }}
           >
-            {checkoutLoading ? 'Redirecting to Stripe…' : isPastDue || isCanceled ? 'Resubscribe — $29/month' : 'Start Free Trial'}
+            {checkoutLoading ? 'Redirecting to Stripe…' : isPastDue || isCanceled ? 'Resubscribe — $39/month' : 'Start Free Trial'}
           </button>
           <button onClick={signOut} style={{ background:'transparent', border:'none', color:'#7f98b0', cursor:'pointer', fontSize:13 }}>Sign out ({user.email})</button>
         </div>
@@ -2068,7 +2068,7 @@ export default function AppNew(){
               </div>
             </div>
             <button onClick={startCheckout} disabled={checkoutLoading} className='trial-subscribe-btn' style={{ background:GOLD, color:NAVY, border:'none', padding:'7px 16px', borderRadius:6, cursor:'pointer', fontWeight:700, fontSize:13, whiteSpace:'nowrap', flexShrink:0 }}>
-              {checkoutLoading ? 'Redirecting…' : 'Subscribe — $29/mo'}
+              {checkoutLoading ? 'Redirecting…' : 'Subscribe — $39/mo'}
             </button>
           </div>
         )}
@@ -4603,7 +4603,7 @@ function HelpPanel({ onClose, userEmail = '' }) {
         'Your free trial starts the moment you sign up — no credit card required.',
         'The trial banner at the top of the app shows how many days remain.',
         'Click Settings → Billing to see your current plan status.',
-        'When the trial ends, click Subscribe — $29/month — to go to the Stripe checkout.',
+        'When the trial ends, click Subscribe — $39/month — to go to the Stripe checkout.',
         'After subscribing, an Active badge appears and the trial banner disappears.',
         'To update your payment method, download receipts, or cancel, click Manage Billing inside Settings.',
         'Only the account Owner can view and manage billing — Team Members do not have access to billing settings.',
@@ -5370,7 +5370,7 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
               <div style={{ background:'#0a1628', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
                 <div style={{ color:'#7f98b0', fontSize:11, textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Plan</div>
                 <div style={{ color:'#fff', fontWeight:700, fontSize:16 }}>FieldQuote</div>
-                <div style={{ color:GOLD, fontSize:22, fontWeight:700, marginTop:4 }}>$29<span style={{ fontSize:13, color:'#7f98b0', fontWeight:400 }}>/month</span></div>
+                <div style={{ color:GOLD, fontSize:22, fontWeight:700, marginTop:4 }}>$39<span style={{ fontSize:13, color:'#7f98b0', fontWeight:400 }}>/month</span></div>
                 <div style={{ color:'#7f98b0', fontSize:12, marginTop:4 }}>Unlimited quotes &amp; invoices · All features</div>
               </div>
 
@@ -5382,7 +5382,7 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
                       : 'Your free trial has ended. Subscribe to continue using FieldQuote.'}
                   </div>
                   <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
-                    {subscribeLoading ? 'Redirecting to Stripe…' : 'Subscribe — $29/month'}
+                    {subscribeLoading ? 'Redirecting to Stripe…' : 'Subscribe — $39/month'}
                   </button>
                 </div>
               )}
@@ -5395,7 +5395,7 @@ function SettingsPanel({ user, company, name1, name2, name3, subscription, trial
                      :              'No active subscription found.'}
                   </div>
                   <button onClick={onSubscribe} disabled={subscribeLoading} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
-                    {subscribeLoading ? 'Redirecting to Stripe…' : isPastDue ? 'Update Payment Method' : 'Subscribe — $29/month'}
+                    {subscribeLoading ? 'Redirecting to Stripe…' : isPastDue ? 'Update Payment Method' : 'Subscribe — $39/month'}
                   </button>
                 </div>
               )}
