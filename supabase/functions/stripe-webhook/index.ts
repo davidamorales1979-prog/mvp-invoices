@@ -140,7 +140,26 @@ Deno.serve(async (req) => {
   }
 
   // Write subscription state for a given user_id.
+  // Guards against stale/out-of-order events overwriting a newer active subscription.
   async function updateSubscription(userId, stripeSub, label) {
+    const { data: current } = await supabase
+      .from('subscriptions')
+      .select('stripe_subscription_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    const storedSubId = current?.stripe_subscription_id
+    if (storedSubId && storedSubId !== stripeSub.id) {
+      const isTerminal = ['canceled', 'incomplete_expired'].includes(stripeSub.status)
+      if (isTerminal) {
+        // Late/out-of-order event for a different, now-terminal subscription — ignore it
+        console.log(`${label}: IGNORED — event sub ${stripeSub.id} (${stripeSub.status}) does not match tracked sub ${storedSubId}`)
+        return
+      }
+      // Non-terminal event (active, trialing) for a different sub_id — the new sub is taking over
+      console.log(`${label}: sub ID mismatch — updating tracked sub from ${storedSubId} → ${stripeSub.id}`)
+    }
+
     const { error } = await supabase
       .from('subscriptions')
       .update({
@@ -266,6 +285,16 @@ Deno.serve(async (req) => {
         const userId = await resolveUserId(invoice.customer)
         if (!userId) {
           console.error('invoice.payment_failed: could not resolve user for customer', invoice.customer)
+          break
+        }
+        // Only mark past_due if this invoice belongs to the subscription we're currently tracking
+        const { data: current } = await supabase
+          .from('subscriptions')
+          .select('stripe_subscription_id')
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (current?.stripe_subscription_id && current.stripe_subscription_id !== invoice.subscription) {
+          console.log(`invoice.payment_failed: IGNORED — invoice sub ${invoice.subscription} does not match tracked sub ${current.stripe_subscription_id}`)
           break
         }
         const { error } = await supabase
