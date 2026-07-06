@@ -783,7 +783,7 @@ export default function AppNew(){
           const params = new URLSearchParams(window.location.search)
           const hasToken = params.has('sign') || params.has('options') || params.has('join') || params.get('payment') === 'success'
           if (window.location.pathname !== '/login' && !hasToken) {
-            window.location.replace('/landing')
+            window.location.replace('/login')
           }
         }
       } catch (e) {
@@ -799,7 +799,7 @@ export default function AppNew(){
       const u = session?.user ?? null
       setUser(u)
       if (u && window.location.pathname === '/login') {
-        window.history.replaceState({}, '', '/')
+        window.history.replaceState({}, '', '/app')
       }
     })
     return () => {
@@ -5090,7 +5090,7 @@ function JoinPage({ token, user, authLoading }) {
         <div style={cardStyle}>
           <div style={{ color:GOLD, fontWeight:700, fontSize:20, marginBottom:12 }}>You're in!</div>
           <div style={{ color:'#9fb0c6', marginBottom:20 }}>You've joined <strong style={{ color:'#fff' }}>{info.company}</strong> as a team member.</div>
-          <button onClick={() => window.location.href = '/'} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
+          <button onClick={() => window.location.href = '/app'} style={{ width:'100%', padding:'11px 0', borderRadius:7, background:GOLD, color:NAVY, border:'none', fontWeight:700, fontSize:14, cursor:'pointer' }}>
             Open FieldQuote
           </button>
         </div>
