@@ -335,8 +335,9 @@ export default function AppNew(){
   }, [subtotal, projectType, undergroundPct, roughPct, trimPct])
 
   const _now = new Date()
+  const isExempt = profile?.is_exempt === true
   // Allow access while loading or when table doesn't exist yet (subscription === null after load)
-  const isSubActive = subLoading || !subscription || subscription.status === 'active' ||
+  const isSubActive = isExempt || subLoading || !subscription || subscription.status === 'active' ||
     (subscription.status === 'trialing' && subscription.trial_end && new Date(subscription.trial_end) > _now)
   const trialDaysLeft = subscription?.status === 'trialing' && subscription.trial_end
     ? Math.max(0, Math.ceil((new Date(subscription.trial_end) - _now) / 86400000))
@@ -2060,7 +2061,7 @@ export default function AppNew(){
     <div className='invoice-root' style={{ minHeight:'100vh', background:NAVY, color:'#fff', padding:20 }}>
       <div className='invoice-shell' style={{ maxWidth:980, margin:'0 auto', background:'#071827', padding:18, borderRadius:8 }}>
 
-        {subscription?.status === 'trialing' && (
+        {subscription?.status === 'trialing' && !isExempt && (
           <div className='no-print trial-banner' style={{ margin:'-18px -18px 18px -18px', padding:'10px 20px', background: trialDaysLeft <= 7 ? '#2a0e00' : '#0f1e0a', borderBottom:`2px solid ${trialDaysLeft <= 7 ? '#e87040' : GOLD}`, borderRadius:'8px 8px 0 0', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontSize:18, lineHeight:1 }}>{trialDaysLeft <= 7 ? '⚠' : '🕐'}</span>
