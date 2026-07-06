@@ -87,8 +87,8 @@ Deno.serve(async (req) => {
       }],
       metadata: { doc_id },
       expires_at: expiresAt,
-      success_url: `${appUrl}/?payment=success`,
-      cancel_url: `${appUrl}/`,
+      success_url: `${appUrl}/app?payment=success`,
+      cancel_url: `${appUrl}/app`,
     })
 
     return new Response(JSON.stringify({ url: session.url, session_id: session.id }), {

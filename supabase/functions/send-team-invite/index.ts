@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       inviteToken = newMember.invite_token
     }
 
-    const redirectTo = `${APP_URL}/?join=${inviteToken}`
+    const redirectTo = `${APP_URL}/app?join=${inviteToken}`
 
     // Send invite email via Supabase Auth Admin
     const { error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(normalizedEmail, {
