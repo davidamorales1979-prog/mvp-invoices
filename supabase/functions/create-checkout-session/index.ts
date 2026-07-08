@@ -48,9 +48,10 @@ Deno.serve(async (req) => {
 
     if (subError) console.error('create-checkout-session: sub lookup error:', subError.message)
 
-    // Layer 1: Supabase status check
-    if (sub?.status === 'active' || sub?.status === 'trialing') {
-      console.log(`create-checkout-session: user=${user.id} already has status=${sub.status}, blocking new session`)
+    // Layer 1: Supabase status check — only block if already on a paid active subscription.
+    // 'trialing' must be allowed through: that is the normal path for a trial user to subscribe.
+    if (sub?.status === 'active') {
+      console.log(`create-checkout-session: user=${user.id} already has active subscription, blocking new session`)
       return new Response(JSON.stringify({ already_subscribed: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
