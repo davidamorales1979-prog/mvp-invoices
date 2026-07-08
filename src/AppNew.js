@@ -873,15 +873,21 @@ export default function AppNew(){
     setSubLoading(true)
     ;(async () => {
       try {
-        const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', accountId).single()
+        // maybeSingle() returns null (not an error) when 0 or >1 rows exist
+        const { data, error } = await supabase.from('subscriptions').select('*').eq('user_id', accountId).maybeSingle()
         let sub = data
-        // PGRST116 = no rows — create a trial only for independent account owners (never for team members)
-        if (!sub && error?.code === 'PGRST116' && accountId === user.id && userRole !== 'member') {
+        if (error) console.error('Subscription fetch error:', error.message)
+        // No row found — create a trial only for independent account owners (never for team members).
+        // upsert with onConflict prevents duplicate rows if this effect fires multiple times concurrently.
+        if (!sub && !error && accountId === user.id && userRole !== 'member') {
           const trialEnd = new Date()
           trialEnd.setDate(trialEnd.getDate() + 30)
           const ins = await supabase.from('subscriptions')
-            .insert({ user_id: accountId, status: 'trialing', trial_end: trialEnd.toISOString() })
-            .select().single()
+            .upsert(
+              { user_id: accountId, status: 'trialing', trial_end: trialEnd.toISOString() },
+              { onConflict: 'user_id', ignoreDuplicates: true }
+            )
+            .select().maybeSingle()
           sub = ins?.data ?? null
         }
         if (!cancelled) setSubscription(sub)
