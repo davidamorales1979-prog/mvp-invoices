@@ -1373,9 +1373,9 @@ export default function AppNew(){
   function buildPaymentSchedule() {
     if (projectType === 'New Construction') {
       const ps = []
-      if (includeUnderground) ps.push({ name: `${undergroundPct}% Underground`, amount: schedule.underground })
-      if (includeRough)       ps.push({ name: `${roughPct}% Rough-In`, amount: schedule.rough })
-      if (includeTrim)        ps.push({ name: `${trimPct}% Trim`, amount: schedule.trim })
+      if (includeUnderground) ps.push({ name: `${undergroundPct}% Underground`, amount: phases.underground })
+      if (includeRough)       ps.push({ name: `${roughPct}% Rough-In`, amount: phases.rough })
+      if (includeTrim)        ps.push({ name: `${trimPct}% Trim`, amount: phases.trim })
       return ps
     }
     return [
@@ -2657,9 +2657,9 @@ export default function AppNew(){
               <div style={{ color:'#9fb0c6', marginBottom:6 }}>Payment Schedule</div>
               {projectType === 'New Construction' ? (
                 <>
-                  {includeUnderground ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{undergroundPct}% (Underground)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.underground)}</div></div> : null}
-                  {includeRough ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{roughPct}% (Rough-In)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.rough)}</div></div> : null}
-                  {includeTrim ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{trimPct}% (Trim)</div><div style={{ color:GOLD }}>{formatCurrency(schedule.trim)}</div></div> : null}
+                  {includeUnderground ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{undergroundPct}% (Underground)</div><div style={{ color:GOLD }}>{formatCurrency(phases.underground)}</div></div> : null}
+                  {includeRough ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{roughPct}% (Rough-In)</div><div style={{ color:GOLD }}>{formatCurrency(phases.rough)}</div></div> : null}
+                  {includeTrim ? <div style={{ display:'flex', justifyContent:'space-between' }}><div>{trimPct}% (Trim)</div><div style={{ color:GOLD }}>{formatCurrency(phases.trim)}</div></div> : null}
                 </>
               ) : (
                 <>
