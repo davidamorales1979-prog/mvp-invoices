@@ -1142,29 +1142,9 @@ export default function AppNew(){
       const convertEntry = { ts: new Date().toISOString(), entry: 'converted:quote->invoice', status, docNumber }
       const newHistory = [convertEntry, ...history.filter(h => h.entry !== 'payment_link_created')]
 
-      // Determine which phases to include on the invoice.
-      // When all three are checked (the default "full scope quote" state), that means
-      // the quote covers the whole project — auto-select only the first phase
-      // (underground) for this invoice since invoices are issued per billing milestone.
-      // If the user already unchecked phases before converting, respect their selection.
-      const allPhasesSelected = projectType === 'New Construction'
-        && includeUnderground && includeRough && includeTrim
-      const invIncludeUnderground = projectType === 'New Construction'
-        ? (allPhasesSelected ? true : includeUnderground)
-        : includeUnderground
-      const invIncludeRough = projectType === 'New Construction'
-        ? (allPhasesSelected ? false : includeRough)
-        : includeRough
-      const invIncludeTrim = projectType === 'New Construction'
-        ? (allPhasesSelected ? false : includeTrim)
-        : includeTrim
-
-      const invPhaseAmount = (invIncludeUnderground ? phases.underground : 0)
-        + (invIncludeRough ? phases.rough : 0)
-        + (invIncludeTrim ? phases.trim : 0)
-      const invHasPhases = projectType === 'New Construction'
-        && (invIncludeUnderground || invIncludeRough || invIncludeTrim)
-      const invoiceTotal = invHasPhases ? invPhaseAmount + servicesTotal : subtotal
+      // Invoice inherits phase selection exactly as the quote had it.
+      // Never auto-uncheck anything — the user chose those phases on the quote.
+      const invoiceTotal = showNewConstructionSchedule ? selectedPhaseAmount + servicesTotal : subtotal
 
       // ── Step 3: INSERT brand-new invoice row via persistDocument ─────────────
       // Using persistDocument with _forceInsert ensures total:invoiceTotal wins
@@ -1173,9 +1153,9 @@ export default function AppNew(){
         _forceInsert: true,
         doc_type: 'invoice',
         total: invoiceTotal,
-        include_underground: invIncludeUnderground,
-        include_rough: invIncludeRough,
-        include_trim: invIncludeTrim,
+        include_underground: includeUnderground,
+        include_rough: includeRough,
+        include_trim: includeTrim,
         history: newHistory,
         doc_number: newDocNumber,
         raw_counter: newRaw,
@@ -1197,9 +1177,7 @@ export default function AppNew(){
       docTypeRef.current = 'invoice'
       setDocType('invoice')
       setHistory(newHistory)
-      setIncludeUnderground(invIncludeUnderground)
-      setIncludeRough(invIncludeRough)
-      setIncludeTrim(invIncludeTrim)
+      // Phase checkboxes unchanged — invoice keeps whatever the quote had
       counter.reset(newRaw)
       setSaveMessage('Invoice created')
 
