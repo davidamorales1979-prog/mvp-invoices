@@ -143,6 +143,25 @@ function getUnitLabel(type) {
 }
 function formatMoneyInput(n){ return '$' + (Number(n || 0).toString()) }
 function parseMoneyInput(value){ const numeric = Number(String(value).replace(/[^0-9.]/g, '')); return Number.isNaN(numeric) ? 0 : numeric }
+function MoneyInput({ value, onChange, ...rest }){
+  const [text, setText] = useState(() => formatMoneyInput(value))
+  const isFocused = useRef(false)
+  useEffect(() => { if (!isFocused.current) setText(formatMoneyInput(value)) }, [value])
+  return (
+    <input
+      type='text'
+      value={text}
+      onFocus={() => { isFocused.current = true }}
+      onChange={e => {
+        const raw = e.target.value
+        setText(raw)
+        onChange(parseMoneyInput(raw))
+      }}
+      onBlur={() => { isFocused.current = false; setText(formatMoneyInput(value)) }}
+      {...rest}
+    />
+  )
+}
 function formatDocNumber(raw, type){
   let serialNumber = raw > 1000 ? raw - 1000 : raw
   if (serialNumber < 1) serialNumber = 1
@@ -2369,7 +2388,7 @@ export default function AppNew(){
             <div><label style={{ color:'#9fb0c6' }}>Property Type</label><select value={fixtureType} onChange={e=>setFixtureType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>Residential</option><option>Multi-family</option><option>Commercial</option><option>Industrial</option></select></div>
             <div><label style={{ color:'#9fb0c6' }}>Project Type</label><select value={projectType} onChange={e=>setProjectType(e.target.value)} style={{ padding:8, marginLeft:6, borderRadius:4 }}><option>New Construction</option><option>Service/Replacement</option><option>Commercial</option><option>Industrial</option></select></div>
             <div><label style={{ color:'#9fb0c6' }}>Fixtures / {getUnitLabel(fixtureType).replace(/s$/, '')}</label><input type='number' value={fixturesPerHouse} onChange={e=>setFixturesPerHouse(Number(e.target.value)||0)} style={{ width:80, marginLeft:6 }} /></div>
-            <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><input type='text' value={formatMoneyInput(pricePerFixture)} onChange={e=>setPricePerFixture(parseMoneyInput(e.target.value))} style={{ width:100, marginLeft:6 }} /></div>
+            <div><label style={{ color:'#9fb0c6' }}>Price / Fixture</label><MoneyInput value={pricePerFixture} onChange={setPricePerFixture} style={{ width:100, marginLeft:6 }} /></div>
             <div style={{ marginLeft:'auto', textAlign:'right' }}><div style={{ color:'#9fb0c6' }}>Base</div><div style={{ color:GOLD, fontWeight:700 }}>{formatCurrency(base)}</div></div>
           </div>
           <div className='phase-boxes' style={{ marginTop:10, display:'flex', gap:10, flexWrap:'wrap' }}>
@@ -2448,9 +2467,9 @@ export default function AppNew(){
                     {group.label === 'Water Fixtures' && (
                       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                         <span style={{ color:'#7f98b0', fontSize:10, whiteSpace:'nowrap' }}>Price / Fixture</span>
-                        <input type='text'
-                          value={formatMoneyInput(waterFixtureUnitPrice)}
-                          onChange={e => setAllWaterFixtureUnit(parseMoneyInput(e.target.value))}
+                        <MoneyInput
+                          value={waterFixtureUnitPrice}
+                          onChange={setAllWaterFixtureUnit}
                           placeholder='$0'
                           style={{ width:88, padding:'2px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, fontSize:12, fontWeight:700, textAlign:'right' }} />
                       </div>
@@ -2458,9 +2477,9 @@ export default function AppNew(){
                     {group.label === 'Gas Fixtures' && (
                       <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                         <span style={{ color:'#7f98b0', fontSize:10, whiteSpace:'nowrap' }}>Price / Gas Fixture</span>
-                        <input type='text'
-                          value={formatMoneyInput(gasFixtureUnitPrice)}
-                          onChange={e => setAllGasFixtureUnit(parseMoneyInput(e.target.value))}
+                        <MoneyInput
+                          value={gasFixtureUnitPrice}
+                          onChange={setAllGasFixtureUnit}
                           placeholder='$0'
                           style={{ width:88, padding:'2px 6px', background:'#0a1e32', color:GOLD, border:`1px solid ${GOLD}66`, borderRadius:4, fontSize:12, fontWeight:700, textAlign:'right' }} />
                       </div>
@@ -2495,14 +2514,14 @@ export default function AppNew(){
                               {whMode !== 'ind_2pay' ? (
                                 <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                                   <input type='number' value={s.qty||0} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
-                                  <input type='text' value={formatMoneyInput(s.unit||0)} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                  <MoneyInput value={s.unit||0} onChange={v=>updateService(i,'unit',v)} style={{ width:140 }} placeholder='$0' />
                                   <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s.qty||0)*(s.unit||0))}</div>
                                 </div>
                               ) : (
                                 [['Start','startUnit'],['Completion','finishUnit']].map(([label,key])=>(
                                   <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
                                     <span style={{ color:'#9fb0c6', fontSize:12, width:80, flexShrink:0 }}>{label}</span>
-                                    <input type='text' value={formatMoneyInput(s[key]||0)} onChange={e=>updateService(i,key,parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                    <MoneyInput value={s[key]||0} onChange={v=>updateService(i,key,v)} style={{ width:140 }} placeholder='$0' />
                                     <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency(s[key]||0)}</div>
                                   </div>
                                 ))
@@ -2546,14 +2565,14 @@ export default function AppNew(){
                               {sMode !== 'ind_2pay' ? (
                                 <div className='no-print' style={{ display:'flex', gap:8, alignItems:'center' }}>
                                   <input type='number' value={s.qty||0} onChange={e=>updateService(i,'qty',Number(e.target.value)||0)} style={{ width:70 }} placeholder='Qty' />
-                                  <input type='text' value={formatMoneyInput(s.unit||0)} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                  <MoneyInput value={s.unit||0} onChange={v=>updateService(i,'unit',v)} style={{ width:140 }} placeholder='$0' />
                                   <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency((s.qty||0)*(s.unit||0))}</div>
                                 </div>
                               ) : (
                                 [['Start','startUnit'],['Completion','finishUnit']].map(([label,key])=>(
                                   <div key={label} style={{ display:'flex', gap:8, alignItems:'center' }}>
                                     <span style={{ color:'#9fb0c6', fontSize:12, width:80, flexShrink:0 }}>{label}</span>
-                                    <input type='text' value={formatMoneyInput(s[key]||0)} onChange={e=>updateService(i,key,parseMoneyInput(e.target.value))} style={{ width:140 }} placeholder='$0' />
+                                    <MoneyInput value={s[key]||0} onChange={v=>updateService(i,key,v)} style={{ width:140 }} placeholder='$0' />
                                     <div style={{ color:GOLD, minWidth:90, textAlign:'right' }}>{formatCurrency(s[key]||0)}</div>
                                   </div>
                                 ))
@@ -2601,7 +2620,7 @@ export default function AppNew(){
                           {isStorm && s.lfMode ? <span style={{ fontSize:10, color:'#7f98b0' }}>feet</span> : null}
                         </div>
                         <div className='no-print' style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                          <input type='text' value={formatMoneyInput(s.unit)} disabled={!s.enabled} onChange={e=>updateService(i,'unit',parseMoneyInput(e.target.value))} style={{ width:110 }} />
+                          <MoneyInput value={s.unit} disabled={!s.enabled} onChange={v=>updateService(i,'unit',v)} style={{ width:110 }} />
                           {isStorm && s.lfMode ? <span style={{ fontSize:10, color:'#7f98b0' }}>per linear ft</span> : null}
                         </div>
                         <div style={{ color:GOLD, minWidth:110, textAlign:'right' }}>{formatCurrency(s.enabled ? (s.qty||0)*s.unit : 0)}</div>
@@ -5494,7 +5513,7 @@ function AddOnRow({ onAdd }){
     <div className='no-print' style={{ display:'flex', gap:8, marginTop:8 }}>
       <input placeholder='Description' value={d} onChange={e=>setD(e.target.value)} style={{ flex:2, padding:8 }} />
       <input type='number' value={q} onChange={e=>setQ(Number(e.target.value)||0)} style={{ width:80, padding:8 }} />
-      <input type='text' value={formatMoneyInput(u)} onChange={e=>setU(parseMoneyInput(e.target.value))} style={{ width:120, padding:8 }} />
+      <MoneyInput value={u} onChange={setU} style={{ width:120, padding:8 }} />
       <button onClick={()=>{ if(d) { onAdd(d,q,u); setD(''); setQ(1); setU(0) } }} style={{ background:GOLD, color:NAVY, padding:8, borderRadius:6 }}>Add</button>
     </div>
   )
